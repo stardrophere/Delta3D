@@ -6,6 +6,8 @@ from app.models import (
     CommunityPost, ModelAsset, InteractionLike,
     PostCollection, Comment, UserFollow, User
 )
+from app.models import Visibility  #
+from app.schemas import PostCreate
 
 
 def get_posts_by_user(
@@ -128,3 +130,134 @@ def get_community_posts(session: Session, current_user_id: int) -> List[dict]:
 
     return results
 
+
+
+
+
+def create_post(session: Session, user_id: int, post_in: PostCreate) -> CommunityPost:
+    """
+    创建新帖子
+    """
+    db_post = CommunityPost(
+        user_id=user_id,
+        asset_id=post_in.asset_id,
+        content=post_in.content,
+        visibility=Visibility(post_in.visibility),  # 转换字符串为枚举
+        allow_download=post_in.allow_download,
+
+    )
+
+    session.add(db_post)
+    session.commit()
+    session.refresh(db_post)
+    return db_post
+
+
+# --- 点赞 ---
+def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int]:
+    """
+    切换帖子点赞
+    同时更新：
+    1. 帖子的 like_count
+    2. 帖子作者的 liked_total_count (获赞总数)
+    """
+    # 1. 查帖子
+    post = session.get(CommunityPost, post_id)
+    if not post:
+        return False, 0
+
+    # 2. 查当前用户对该帖子的点赞记录
+    link = session.exec(
+        select(InteractionLike).where(
+            InteractionLike.user_id == user_id,
+            InteractionLike.post_id == post_id
+        )
+    ).first()
+
+    # 3. 查帖子的作者 (为了更新他的获赞数)
+    # 注意：post.author 可能还没加载，所以最好直接通过 id 查 user
+    author = session.get(User, post.user_id)
+
+    if link:
+        # --- 取消点赞 ---
+        session.delete(link)
+        post.like_count -= 1  # 帖子赞数 -1
+        if author:
+            author.liked_total_count -= 1  # 作者获赞总数 -1
+        is_active = False
+    else:
+        # --- 点赞 ---
+        new_link = InteractionLike(user_id=user_id, post_id=post_id)
+        session.add(new_link)
+        post.like_count += 1  # 帖子赞数 +1
+        if author:
+            author.liked_total_count += 1  # 作者获赞总数 +1
+        is_active = True
+
+    # 4. 提交所有更改
+    session.add(post)
+    if author:
+        session.add(author)
+
+    session.commit()
+    session.refresh(post)
+
+    return is_active, post.like_count
+
+
+# --- 收藏帖子 ---
+def toggle_collection(session: Session, user_id: int, post_id: int) -> tuple[bool, int]:
+    """
+    切换帖子收藏
+    Returns: (is_collected, new_count)
+    """
+    post = session.get(CommunityPost, post_id)
+    if not post:
+        return False, 0
+
+    link = session.exec(
+        select(PostCollection).where(
+            PostCollection.user_id == user_id,
+            PostCollection.post_id == post_id
+        )
+    ).first()
+
+    if link:
+        session.delete(link)
+        post.collect_count -= 1
+        is_active = False
+    else:
+        new_link = PostCollection(user_id=user_id, post_id=post_id)
+        session.add(new_link)
+        post.collect_count += 1
+        is_active = True
+
+    session.add(post)
+    session.commit()
+    session.refresh(post)
+    return is_active, post.collect_count
+
+
+# --- 评论 ---
+def create_comment(session: Session, user_id: int, post_id: int, content: str, parent_id: int | None) -> Comment:
+    """发布评论"""
+    post = session.get(CommunityPost, post_id)
+    if not post:
+        return None
+
+    # 1. 创建评论
+    comment = Comment(
+        user_id=user_id,
+        post_id=post_id,
+        content=content,
+        parent_id=parent_id
+    )
+    session.add(comment)
+
+    # 2. 帖子评论数 +1
+    post.comment_count += 1
+    session.add(post)
+
+    session.commit()
+    session.refresh(comment)
+    return comment

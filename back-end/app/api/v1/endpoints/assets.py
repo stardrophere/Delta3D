@@ -15,6 +15,7 @@ from app.crud import crud_asset
 from app.core.config import settings
 from app.ngp.worker import task_train_asset
 from app.schemas import AssetDetail
+from app.schemas import ToggleResponse
 
 router = APIRouter()
 
@@ -107,7 +108,8 @@ def upload_asset(
         description=new_asset.description,
         tags=new_asset.tags,
         is_collected=False,
-        created_at=str(new_asset.created_at)
+        created_at=str(new_asset.created_at),
+        status=new_asset.status
     )
 
 
@@ -145,3 +147,21 @@ def read_asset_detail(
         status=asset.status,
         created_at=str(asset.created_at)
     )
+
+
+@router.post("/{asset_id}/collect", response_model=ToggleResponse)
+def collect_asset(
+        asset_id: int,
+        session: Session = Depends(get_session),
+        current_user: User = Depends(get_current_user)
+):
+    """收藏/取消收藏 模型"""
+    # 检查是否存在
+    asset = session.get(ModelAsset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="资产不存在")
+
+    is_collected = crud_asset.toggle_collection(session, current_user.id, asset_id)
+
+    # 模型表里没有专门的 collect_count 字段，所以 new_count 返回 0 或前端自己维护
+    return ToggleResponse(is_active=is_collected, new_count=0)

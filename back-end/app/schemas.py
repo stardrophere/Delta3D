@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from enum import Enum
 from sqlmodel import SQLModel
 
 # 注册时，前端需要传的数据
@@ -78,3 +78,68 @@ class AssetDetail(SQLModel):
     model_url: str | None   # 对应数据库的 model_path (生成的模型文件)
     status: str             # 状态 (pending/processing/completed/failed)
     created_at: str         # 时间字符串
+
+class PostCreate(SQLModel):
+    """创建帖子时的请求参数"""
+    asset_id: int
+    content: str | None = None  # 帖子正文
+    visibility: str = "public"  # 默认公开
+    allow_download: bool = True
+
+# 1. 通用的点赞/收藏响应
+class ToggleResponse(SQLModel):
+    is_active: bool  # True=已点赞/已收藏, False=已取消
+    new_count: int   # 最新的总数 (点赞数/收藏数)
+
+# 2. 创建评论的请求参数
+class CommentCreate(SQLModel):
+    content: str
+    parent_id: int | None = None # 如果是回复别人的评论，填这个
+
+# 3. 评论返回结构
+class CommentOut(SQLModel):
+    id: int
+    user_id: int
+    username: str
+    avatar_url: str | None
+    content: str
+    created_at: str
+
+
+
+
+
+
+class StreamActionType(str, Enum):
+    ROTATE = "rotate"  # 对应鼠标左键
+    PAN = "pan"  # 对应鼠标中键
+    ZOOM = "zoom"  # 对应滚轮
+
+
+class StreamDirection(str, Enum):
+    # --- 新增通用方向 (用于旋转和平移) ---
+    UP = "up"
+    DOWN = "down"
+    LEFT = "left"
+    RIGHT = "right"
+
+    # --- 原有方向 (保留) ---
+    CLOCKWISE = "clockwise"
+    COUNTER_CLOCKWISE = "counter_clockwise"
+
+    # --- 缩放方向 ---
+    IN = "in"
+    OUT = "out"
+
+
+class ControlCommand(SQLModel):
+    action: StreamActionType
+    direction: StreamDirection
+    mode: str = "start"  # "start" (按下) 或 "stop" (松开)
+
+
+# StreamStatus 保持不变
+class StreamStatus(SQLModel):
+    is_active: bool
+    rtsp_url: str | None
+    current_asset_id: int | None

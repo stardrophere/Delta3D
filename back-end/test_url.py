@@ -4,12 +4,8 @@ import json
 import requests
 
 API_URL = "http://127.0.0.1:8000/api/v1/assets/upload"
-VIDEO_PATH = r"E:\ScnuProject\Verification\c.mp4"
+VIDEO_PATH = r"E:\ScnuProject\Verification\ns2.mp4"
 
-# 如果你的接口需要登录（Depends(get_current_user)），通常要带 token
-# 下面两种方式二选一：
-TOKEN = os.getenv("TOKEN", "")  # 你可以在环境变量里设置 TOKEN
-# TOKEN = "YOUR_JWT_TOKEN"
 
 def main():
     if not os.path.exists(VIDEO_PATH):
@@ -22,7 +18,7 @@ def main():
     data = {
         "title": "测试资产",
         "description": "这是一个上传测试",
-        "tags": "猫,动物,3D",
+        "tags": "机器,玩具,3D",
         "remark": "hello",
     }
 

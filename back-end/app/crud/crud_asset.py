@@ -62,3 +62,29 @@ def create_asset(
     session.commit()
     session.refresh(db_asset)
     return db_asset
+
+
+def toggle_collection(session: Session, user_id: int, asset_id: int) -> bool:
+    """
+    切换模型收藏状态
+    Returns: True(收藏成功), False(取消收藏)
+    """
+    # 1. 查一下有没有收藏过
+    statement = select(ModelCollection).where(
+        ModelCollection.user_id == user_id,
+        ModelCollection.asset_id == asset_id
+    )
+    link = session.exec(statement).first()
+
+    if link:
+        # 2. 如果有 -> 删除 (取消收藏)
+        session.delete(link)
+        is_collected = False
+    else:
+        # 3. 如果没有 -> 添加 (收藏)
+        new_link = ModelCollection(user_id=user_id, asset_id=asset_id)
+        session.add(new_link)
+        is_collected = True
+
+    session.commit()
+    return is_collected

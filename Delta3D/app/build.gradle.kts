@@ -40,6 +40,7 @@ android {
 }
 
 dependencies {
+
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     // 1. 图片加载库
     implementation("io.coil-kt:coil-compose:2.6.0")
@@ -60,7 +61,7 @@ dependencies {
     // 5. 视频播放器内核
     implementation("androidx.media3:media3-exoplayer:1.2.0")
     implementation("androidx.media3:media3-ui:1.2.0")
-    implementation("androidx.media3:media3-exoplayer-rtsp:1.2.0") // 关键：RTSP 支持模块
+    implementation("androidx.media3:media3-exoplayer-rtsp:1.2.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
