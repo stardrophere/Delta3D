@@ -13,18 +13,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class HomeViewModel : ViewModel() {
-    // 1. 原始完整数据源 (不对外暴露，仅用于过滤源)
     private var _allAssets = listOf<AssetCard>()
 
-    // 2. 最终展示给 UI 的列表 (经过了状态筛选和搜索过滤)
+    // 最终展示给 UI 的列表
     private val _displayAssets = MutableStateFlow<List<AssetCard>>(emptyList())
     val displayAssets = _displayAssets.asStateFlow()
 
-    // 3. 搜索框文字状态 (用于 UI 即时回显)
+    // 搜索框文字状态
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    // 4. 处理中任务数量
+    //处理中任务数量
     private val _processingCount = MutableStateFlow(0)
     val processingCount = _processingCount.asStateFlow()
 
@@ -38,42 +37,40 @@ class HomeViewModel : ViewModel() {
      * 用户输入时调用此方法 (包含防抖逻辑)
      */
     fun onSearchInput(query: String) {
-        // 1. 立即更新 UI 文字，保证输入框不卡顿
+        // 立即更新 UI 文字
         _searchQuery.value = query
 
-        // 2. 取消上一次未执行的搜索任务
+        //取消上一次未执行的搜索任务
         searchJob?.cancel()
 
-        // 3. 启动新任务
+        //启动新任务
         searchJob = viewModelScope.launch {
-            // ⏳ 防抖核心：如果用户 500ms 内连续输入，之前的任务会被 cancel
-            delay(500)
-            // 时间到了，在后台线程执行过滤
+            // 防抖
+            delay(600)
             refreshDisplayList()
         }
     }
 
     /**
-     * 🟢 收藏切换 (乐观更新)
+     * 🟢 收藏切换
      */
     fun toggleCollect(assetId: Int, token: String) {
         viewModelScope.launch {
             val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
 
-            // 1. 备份旧数据用于回滚
+            // 备份旧数据用于回滚
             val backupAssets = _allAssets
 
-            // 2. 立即更新本地 UI 状态 (乐观更新)
+            // 立即更新本地 UI 状态
             updateLocalAssetStatus(assetId)
 
             try {
-                // 3. 调用后端接口
                 val response = RetrofitClient.api.toggleCollect(authHeader, assetId)
-                // 4. 根据后端结果二次校验状态（确保同步）
+                // 后端结果二次校验状态
                 syncAssetStatus(assetId, response.is_active)
             } catch (e: Exception) {
                 e.printStackTrace()
-                // 5. 失败则回滚
+                //失败回滚
                 _allAssets = backupAssets
                 refreshDisplayList()
             }
@@ -121,9 +118,10 @@ class HomeViewModel : ViewModel() {
                 val list = RetrofitClient.api.getAssets(authHeader)
 
                 _allAssets = list
-                _processingCount.value = list.count { it.status == "pending" || it.status == "processing" }
+                _processingCount.value =
+                    list.count { it.status == "pending" || it.status == "processing" }
 
-                // 刷新显示列表（应用当前的搜索词）
+                // 刷新显示列表
                 refreshDisplayList()
 
             } catch (e: Exception) {

@@ -2,20 +2,22 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from app.process_manager.utils import run_and_stream, NonBlockingCommandRunner
 
+
 def train_ngp_from_video(
-    video_path: str,
-    snapshot_path: str,
-    *,
-    venv_python: str = r"D:\ProgramData\miniconda3\envs\instantNGP\python.exe",
-    colmap2nerf_script: str = r"E:\ScnuProject\Verification\scripts\colmap2nerf.py",
-    ngp_run_script: str = r"D:\InstantNgp\instant-ngp\scripts\run.py",
-    video_fps: int = 5,
-    n_steps: int = 5000,
-    colmap_camera_model: str = "SIMPLE_RADIAL",
-    aabb_scale: int = 8,
-    colmap_matcher: str = "exhaustive",
-    user_input: str = "y\ny\n",
-    scene_dir: Optional[str] = None,
+        video_path: str,
+        snapshot_path: str,
+        *,
+        venv_python: str = r"D:\ProgramData\miniconda3\envs\instantNGP\python.exe",
+        colmap2nerf_script: str = r"E:\ScnuProject\Verification\scripts\colmap2nerf.py",
+        ngp_run_script: str = r"D:\InstantNgp\instant-ngp\scripts\run.py",
+        video_fps: int = 5,
+        n_steps: int = 5000,
+        colmap_camera_model: str = "SIMPLE_RADIAL",
+        aabb_scale: int = 8,
+        colmap_matcher: str = "exhaustive",
+        # sharpen_strength: float = 0.0,
+        user_input: str = "y\ny\n",
+        scene_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     输入：
@@ -35,7 +37,6 @@ def train_ngp_from_video(
     video_path = str(video_path)
     # return
 
-
     if not Path(video_path).exists():
         raise FileNotFoundError(f"视频不存在: {video_path}")
 
@@ -48,14 +49,12 @@ def train_ngp_from_video(
     if not Path(ngp_run_script).exists():
         raise FileNotFoundError(f"run.py 不存在: {ngp_run_script}")
 
-    # # 自动创建 scene_dir：和 snapshot 同级，名字 <snapshot_stem>_scene
     # if scene_dir is None:
     #     scene_path = snapshot_path.parent / f"{snapshot_path.stem}_scene"
     # else:
     #     scene_path = Path(scene_dir).resolve()
     #
     # scene_path.mkdir(parents=True, exist_ok=True)
-
 
     # transforms.json
     video_dir = Path(video_path).resolve().parent
@@ -72,10 +71,11 @@ def train_ngp_from_video(
         "--run_colmap",
         "--colmap_matcher", colmap_matcher,
         "--out", str(transforms_path),
+        "--overwrite",
+        # "--sharpen_strength", str(sharpen_strength)
     ]
 
-    success, tip, frames = run_and_stream(colmap_cmd, user_input,cwd=video_dir)
-
+    success, tip, frames = run_and_stream(colmap_cmd, user_input, cwd=video_dir)
 
     if (not success) or (tip == 0):
         raise RuntimeError(
@@ -111,6 +111,5 @@ def train_ngp_from_video(
         "frames": frames,
         "video_path": video_path,
     }
-
 
 # train_ngp_from_video(r"E:\ScnuProject\2025-Autumn-Aberdeen-10-Delta3D\back-end\static\uploads\b2c795e8ce8042068e521cf618abc02c\video.mp4",r"E:\ScnuProject\2025-Autumn-Aberdeen-10-Delta3D\back-end\static\uploads\b2c795e8ce8042068e521cf618abc02c\model.")

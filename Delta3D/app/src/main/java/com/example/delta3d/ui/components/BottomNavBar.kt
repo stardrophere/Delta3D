@@ -38,22 +38,22 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// --- 1) 玻璃拟态配色 ---
-private val BarGlass = Color.Black.copy(alpha = 0.9f)          // 加深一点透明度，配合噪点更有质感
+// --- 玻璃拟态配色 ---
+private val BarGlass = Color.Black.copy(alpha = 0.9f)
 private val BarStroke = Color.White.copy(alpha = 0.15f)
 private val UnselectedTint = Color.White.copy(alpha = 0.65f)
 private val SelectedTint = Color.White
 
-// 选中“内核”的渐变
+
 private val BubbleGradient = Brush.linearGradient(
     colors = listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF))
 )
 
-// --- 2) 尺寸常量 ---
+// --- 尺寸常量 ---
 private val BarShapeHeight = 65.dp
 private val CutoutRadius = 28.dp
 
-// --- 3) 数据模型 ---
+// --- 数据模型 ---
 sealed class BottomNavItem(
     val route: String,
     val title: String,
@@ -61,7 +61,9 @@ sealed class BottomNavItem(
     val unselectedIcon: ImageVector
 ) {
     object Home : BottomNavItem("home", "主页", Icons.Filled.Home, Icons.Outlined.Home)
-    object Community : BottomNavItem("community", "社区", Icons.Filled.Whatshot, Icons.Outlined.Whatshot)
+    object Community :
+        BottomNavItem("community", "社区", Icons.Filled.Whatshot, Icons.Outlined.Whatshot)
+
     object Profile : BottomNavItem("profile", "我的", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
@@ -95,47 +97,51 @@ fun BottomNavBar(
             label = "OffsetAnimation"
         )
 
-        // 🟢 获取噪点 Brush (关键：模拟磨砂质感)
+        // 模拟磨砂质感
         val noiseBrush = rememberNoiseBrush()
 
-        // 🟢 获取光感渐变 (关键：模拟光线在玻璃表面的漫反射)
+        //获取光感渐变
         val highlightGradient = Brush.verticalGradient(
             colors = listOf(
-                Color.White.copy(alpha = 0.15f), // 顶部稍微亮一点
-                Color.White.copy(alpha = 0.02f)  // 底部透明
+                Color.White.copy(alpha = 0.15f),
+                Color.White.copy(alpha = 0.02f)
             )
         )
 
-        // 1) 玻璃导航栏
+        //玻璃导航栏
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(totalHeight)
                 .align(Alignment.BottomCenter)
-                // 阴影稍微柔和一点
                 .shadow(
                     elevation = 12.dp,
                     spotColor = Color.Black.copy(alpha = 0.2f),
                     shape = object : Shape {
-                        override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-                            return Outline.Generic(getCutoutPath(size, animatedOffsetX, with(density) { CutoutRadius.toPx() }))
+                        override fun createOutline(
+                            size: Size,
+                            layoutDirection: LayoutDirection,
+                            density: Density
+                        ): Outline {
+                            return Outline.Generic(
+                                getCutoutPath(
+                                    size,
+                                    animatedOffsetX,
+                                    with(density) { CutoutRadius.toPx() })
+                            )
                         }
                     }
                 )
         ) {
             val path = getCutoutPath(size, animatedOffsetX, CutoutRadius.toPx())
 
-            // A. 底层：半透明黑背景
+            // 底层：半透明黑背景
             drawPath(path = path, color = BarGlass, style = Fill)
 
-            // B. 中层：噪点纹理 (这就是“磨砂”的来源)
-            // 使用 SRC_OVER 混合模式，低透明度覆盖
             drawPath(path = path, brush = noiseBrush, alpha = 0.2f, style = Fill)
 
-            // C. 顶层：漫反射光感 (让它看起来不像平面的塑料)
             drawPath(path = path, brush = highlightGradient, style = Fill)
 
-            // D. 描边：玻璃边缘反光
             drawPath(
                 path = path,
                 color = BarStroke,
@@ -143,7 +149,7 @@ fun BottomNavBar(
             )
         }
 
-        // 2) 悬浮球 (保持不变)
+        // 悬浮球
         GlassBubble(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -155,7 +161,7 @@ fun BottomNavBar(
             icon = items[selectedIndex].selectedIcon
         )
 
-        // 3) 图标层 (保持不变)
+        // 图标层
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -200,11 +206,11 @@ fun BottomNavBar(
     }
 }
 
-// --- 辅助函数：生成噪点 Shader ---
+// --- 辅助函数
 @Composable
 fun rememberNoiseBrush(): ShaderBrush {
     return remember {
-        val size = 64 // 噪点图大小，越小性能越好，64足够了
+        val size = 64
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val pixels = IntArray(size * size)
         val random = java.util.Random()
@@ -223,7 +229,7 @@ fun rememberNoiseBrush(): ShaderBrush {
     }
 }
 
-// --- 路径计算 (保持你的优化版) ---
+// --- 路径计算
 private fun getCutoutPath(size: Size, cutoutCenterX: Float, cutoutRadius: Float): Path {
     val path = Path()
     val height = size.height
@@ -312,6 +318,11 @@ private fun GlassBubble(
             },
         contentAlignment = Alignment.Center
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(iconSize))
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }

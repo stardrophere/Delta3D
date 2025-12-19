@@ -77,7 +77,7 @@ class TagColorBinder(
     }
 }
 
-// 🟢 修改：增加 onCollectClick 参数
+
 @Composable
 fun ProductListView(
     dataList: List<AssetCard>,
@@ -103,13 +103,13 @@ fun ProductListView(
                 item = item,
                 tagColorBinder = tagColorBinder,
                 onClick = { onItemClick(item.id) },
-                onCollectClick = { onCollectClick(item.id) } // 🟢 传递 ID
+                onCollectClick = { onCollectClick(item.id) }
             )
         }
     }
 }
 
-// 🟢 修改：增加 onCollectClick 参数
+
 @Composable
 fun ProductListItem(
     item: AssetCard,
@@ -136,7 +136,7 @@ fun ProductListItem(
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
 
-            // 1) 左侧封面
+            // 左侧封面
             Box(
                 modifier = Modifier
                     .width(115.dp)
@@ -154,7 +154,7 @@ fun ProductListItem(
                 )
             }
 
-            // 2) 右侧内容区域
+            // 右侧内容区域
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -162,7 +162,7 @@ fun ProductListItem(
                     .padding(start = 16.dp, end = 12.dp)
             ) {
 
-                // (A) 中间：标题、描述、标签/日期
+                // 中间：标题、描述、标签/日期
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -188,7 +188,7 @@ fun ProductListItem(
                         )
                     }
 
-                    // 🏷️ 标签栏
+                    // 标签栏
                     if (item.tags.isNotEmpty()) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -211,14 +211,13 @@ fun ProductListItem(
                     }
                 }
 
-                // (B) 最右侧：收藏按钮
+                // 收藏按钮
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .fillMaxHeight()
                         .padding(start = 4.dp)
                 ) {
-                    // 🟢 传递点击事件
                     CollectButton(
                         isCollected = item.isCollected,
                         onClick = onCollectClick
@@ -246,7 +245,7 @@ fun TagCapsule(text: String, baseColor: Color) {
     }
 }
 
-// 🟢 修改：增加 onClick 参数
+// onClick 参数
 @Composable
 fun CollectButton(isCollected: Boolean, onClick: () -> Unit) {
     Box(

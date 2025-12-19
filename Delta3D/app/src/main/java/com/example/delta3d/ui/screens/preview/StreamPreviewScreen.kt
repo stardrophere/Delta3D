@@ -63,9 +63,9 @@ fun StreamPreviewScreen(
     val uiState by streamVm.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 重试计数器 (用于处理 RTSP 404 Race Condition)
+    // 重试计数器
     var retryCount by remember { mutableIntStateOf(0) }
-    val maxRetries = 5
+    val maxRetries = 6
 
     // 初始化推流
     LaunchedEffect(assetId) {
@@ -81,14 +81,14 @@ fun StreamPreviewScreen(
         }
     }
 
-    // 🟢 1. 配置极低延迟的 LoadControl (强制吃掉缓存)
+    // 配置极低延迟的 LoadControl
     val loadControl = remember {
         DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                100,  // minBufferMs: 最小缓冲100ms就开始
-                300,  // maxBufferMs: 最大只缓冲300ms
-                50,   // bufferForPlaybackMs: 首次播放缓冲阈值
-                50    // bufferForPlaybackAfterRebufferMs: 卡顿后恢复阈值
+                100,
+                200,
+                50,
+                50
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -112,7 +112,7 @@ fun StreamPreviewScreen(
                                 "🔄 检测到播放失败，准备执行第 $retryCount 次重试..."
                             )
                         } else {
-                            Log.e("TRACK_STREAM", "❌ 超过最大重试次数，放弃播放")
+                            Log.e("TRACK_STREAM", "超过最大重试次数，放弃播放")
                         }
                     }
 
@@ -130,26 +130,26 @@ fun StreamPreviewScreen(
     LaunchedEffect(retryCount) {
         if (retryCount > 0) {
             Log.d("TRACK_STREAM", "⏳ 等待 1.5秒后重试...")
-            delay(1500)
+            delay(2000)
 
             if (uiState is StreamUiState.Streaming) {
                 val url = (uiState as StreamUiState.Streaming).url
                 Log.d("TRACK_STREAM", "🔄 执行重试: $url")
 
-                // 🟢 配置低延迟 MediaItem
+                //低延迟 MediaItem
                 val mediaItem = MediaItem.Builder()
                     .setUri(url)
                     .setLiveConfiguration(
                         MediaItem.LiveConfiguration.Builder()
-                            .setMaxPlaybackSpeed(1.1f) // 允许1.1倍速追赶进度
+                            .setMaxPlaybackSpeed(1.1f)
                             .setMinPlaybackSpeed(1.0f)
-                            .setTargetOffsetMs(50)     // 目标延迟 50ms
+                            .setTargetOffsetMs(50)
                             .build()
                     )
                     .build()
 
                 val mediaSource = RtspMediaSource.Factory()
-                    .setForceUseRtpTcp(false) // 🟢 设为 false 使用 UDP (速度最快)
+                    .setForceUseRtpTcp(false) // 使用 UDP
                     .setTimeoutMs(3000)
                     .createMediaSource(mediaItem)
 
@@ -164,22 +164,22 @@ fun StreamPreviewScreen(
     LaunchedEffect(uiState) {
         if (uiState is StreamUiState.Streaming && retryCount == 0) {
             val url = (uiState as StreamUiState.Streaming).url
-            Log.d("TRACK_STREAM", "3. ExoPlayer 首次准备播放: $url")
+            Log.d("TRACK_STREAM", "ExoPlayer 首次准备播放: $url")
 
             // 🟢 配置低延迟 MediaItem
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
                 .setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.1f) // 允许1.1倍速追赶进度
+                        .setMaxPlaybackSpeed(1.1f)
                         .setMinPlaybackSpeed(1.0f)
-                        .setTargetOffsetMs(50)     // 目标延迟 50ms
+                        .setTargetOffsetMs(50)
                         .build()
                 )
                 .build()
 
             val mediaSource = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(false) // 🟢 设为 false 使用 UDP (速度最快)
+                .setForceUseRtpTcp(false)
                 .setTimeoutMs(3000)
                 .createMediaSource(mediaItem)
 
@@ -211,7 +211,7 @@ fun StreamPreviewScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 1. 主要内容层 (视频 或 Loading/Error)
+        // 主要内容层 (视频 或 Loading/Error)
         when (uiState) {
             is StreamUiState.Loading -> {
                 CircularProgressIndicator(
@@ -248,7 +248,7 @@ fun StreamPreviewScreen(
 
             is StreamUiState.Streaming -> {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // (A) 视频层 - 全屏铺满
+                    // 视频层
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {
@@ -265,13 +265,13 @@ fun StreamPreviewScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // (B) 重试加载层 - 美化的半透明全屏遮罩
+                    // 重试加载层
                     if (retryCount > 0 && retryCount < maxRetries) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(Color.Black.copy(alpha = 0.75f))
-                                .pointerInput(Unit) { /* 拦截点击 */ },
+                                .pointerInput(Unit) {},
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -304,7 +304,7 @@ fun StreamPreviewScreen(
             else -> {}
         }
 
-        // 2. 顶部返回按钮
+        // 顶部返回按钮
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -315,7 +315,7 @@ fun StreamPreviewScreen(
             Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
 
-        // 3. 底部悬浮控制面板
+        // 底部悬浮控制面板
         if (uiState is StreamUiState.Streaming) {
             StreamControlOverlay(
                 modifier = Modifier
@@ -344,7 +344,7 @@ fun StreamControlOverlay(
         verticalAlignment = Alignment.Bottom
     ) {
 
-        // 左侧：模式切换 + 缩放
+        // 模式切换
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
             GlassButton(
@@ -411,7 +411,7 @@ fun StreamControlOverlay(
             }
         }
 
-        // 右侧：方向键
+        // 方向键
         GlassContainer(shape = CircleShape, padding = 10.dp) {
             Box(
                 modifier = Modifier.size(160.dp),

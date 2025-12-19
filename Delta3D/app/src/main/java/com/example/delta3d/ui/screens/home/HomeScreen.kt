@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add // 🟢 新增：加号图标
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
@@ -65,16 +64,12 @@ import com.example.delta3d.api.AssetCard
 import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.CompositingStrategy
-
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.material.icons.rounded.Add
 
 // --- 样式常量 ---
@@ -92,11 +87,11 @@ private val GlassBackground = Brush.linearGradient(
     )
 )
 
-// 🟢 新增：FAB 专属渐变 (青色系，配合原有的 64FFDA)
+// FAB 专属渐变
 private val FabGradient = Brush.linearGradient(
     colors = listOf(
         Color(0xFF64FFDA), // 亮青色
-        Color(0xFF00B8D4)  // 深青色，增加立体感
+        Color(0xFF00B8D4)  // 深青色
     )
 )
 
@@ -107,12 +102,11 @@ fun HomeScreen(
     sessionVm: SessionViewModel,
     homeVm: HomeViewModel = viewModel(),
     onAssetClick: (Int) -> Unit,
-    // 🟢 新增：当选好视频后，通知导航跳转
     onNavigateToUpload: (android.net.Uri) -> Unit
 ) {
     val token by sessionVm.token.collectAsState()
 
-    // 🟢 观察 VM 处理好的数据
+    // 观察 VM 处理好的数据
     val displayAssets by homeVm.displayAssets.collectAsState()
     val isRefreshing by homeVm.isRefreshing.collectAsState()
     val searchQuery by homeVm.searchQuery.collectAsState()
@@ -124,7 +118,7 @@ fun HomeScreen(
         colors = listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF))
     )
 
-    // 🟢 新增：定义媒体选择器 Launcher
+    // 定义媒体选择器 Launcher
     val mediaPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
@@ -138,7 +132,7 @@ fun HomeScreen(
         token?.let { if (it.isNotEmpty()) homeVm.loadAssets(it) }
     }
 
-    // 🟢 定义点击处理函数：调用 VM 的 toggleCollect
+    // 定义点击处理函数：调用 VM 的 toggleCollect
     val onCollectToggle: (Int) -> Unit = { id ->
         token?.let { homeVm.toggleCollect(id, it) }
     }
@@ -154,7 +148,7 @@ fun HomeScreen(
         label = "offset"
     )
 
-    // 🟢 逻辑：如果正在搜索，强制显示列表视图
+    // 如果正在搜索，强制显示列表视图
     val showListView = !isGridView || searchQuery.isNotEmpty()
 
     val focusManager = LocalFocusManager.current
@@ -175,7 +169,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
         ) {
-            // 1. 顶部 Header
+            //顶部 Header
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -236,7 +230,7 @@ fun HomeScreen(
                 }
             }
 
-            // 2. 列表内容
+            //列表内容
             Box(modifier = Modifier.weight(1f)) {
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
@@ -265,7 +259,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize()
                         ) { isListMode ->
                             if (isListMode) {
-                                // 🟢 列表视图
+                                // 列表视图
                                 ProductListView(
                                     dataList = displayAssets,
                                     bottomPadding = innerPadding.calculateBottomPadding(),
@@ -273,7 +267,7 @@ fun HomeScreen(
                                     onCollectClick = onCollectToggle
                                 )
                             } else {
-                                // 🟢 网格视图
+                                // 网格视图
                                 ProductStaggeredGrid(
                                     dataList = displayAssets,
                                     bottomPadding = innerPadding.calculateBottomPadding(),
@@ -285,21 +279,20 @@ fun HomeScreen(
                     }
                 }
             }
-        } // Column 结束
+        }
 
-        // 🟢 3. 修改：使用自定义玻璃球体替代原生 FAB
+        // FAB
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = innerPadding.calculateBottomPadding() + 20.dp, end = 20.dp)
         ) {
-            // 直接复用你文件中已经存在的 GlassBubble 函数
             GlassBubble(
                 modifier = Modifier
-                    .size(50.dp) // 保持和底部栏悬浮球一致的大小 (28.dp * 2)
+                    .size(50.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = null, // 去除水波纹，保持玻璃质感
+                        indication = null,
                         onClick = {
                             // 启动系统媒体选择器
                             mediaPickerLauncher.launch(
@@ -307,7 +300,7 @@ fun HomeScreen(
                             )
                         }
                     ),
-                fill = BubbleGradient, // 使用刚才定义的紫青渐变
+                fill = BubbleGradient,
                 icon = Icons.Rounded.Add,
                 iconSize = 44.dp
             )
@@ -319,7 +312,7 @@ fun HomeScreen(
 // --- 组件定义 ---
 
 @Composable
-private fun EditableGlassySearchBar(
+fun EditableGlassySearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String,
@@ -430,7 +423,7 @@ fun GlassyIconButton(
     }
 }
 
-// 🟢 修改：增加 onCollectClick 参数
+
 @Composable
 fun ProductStaggeredGrid(
     dataList: List<AssetCard>,
@@ -452,19 +445,19 @@ fun ProductStaggeredGrid(
             ProductCard(
                 item = item,
                 onClick = { onItemClick(item.id) },
-                onCollectClick = { onCollectClick(item.id) } // 传给 Card
+                onCollectClick = { onCollectClick(item.id) }
             )
         }
     }
 }
 
-// 🟢 修改：增加 onCollectClick 并绑定到图标
+// 绑定到图标
 @Composable
 fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit) {
     var show by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { show = true }
 
-    val height = remember { item.randomHeightDp.dp }
+    val height = remember { item.height.dp }
     val fullImageUrl = remember(item.coverUrl) {
         item.coverUrl?.let { url ->
             val base = RetrofitClient.BASE_URL.removeSuffix("/")
@@ -546,7 +539,7 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
     }
 }
 
-// ProcessingStatusBadge 保持不变
+
 @Composable
 fun ProcessingStatusBadge(count: Int) {
     val infiniteTransition = rememberInfiniteTransition(label = "spin")
@@ -601,7 +594,7 @@ fun ProcessingStatusBadge(count: Int) {
     }
 }
 
-// 🟢 新增：复刻 GlassBubble 绘制逻辑，用于 FAB
+// 用于 FAB
 @Composable
 private fun GlassBubble(
     modifier: Modifier = Modifier,

@@ -19,5 +19,14 @@ data class AssetDetail(
     val status: String,
 
     @SerializedName("created_at")
-    val createdAt: String
+    val createdAt: String,
+
+    @SerializedName("estimated_gen_seconds")
+    val estimatedGenSeconds: Int?
+)
+
+// 下载接口
+data class DownloadResponse(
+    val url: String,
+    val filename: String
 )

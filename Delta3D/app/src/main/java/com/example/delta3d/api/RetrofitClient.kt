@@ -11,7 +11,7 @@ object RetrofitClient {
         level = HttpLoggingInterceptor.Level.BODY // 打印请求和响应的详细日志
     }
 
-    private val client = OkHttpClient.Builder()
+    val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
         .build()
 

@@ -1,7 +1,8 @@
 package com.example.delta3d.api
+
 import com.google.gson.annotations.SerializedName
 
-// 对应 Python 的 AssetCard
+
 data class AssetCard(
     val id: Int,
     val title: String,
@@ -17,9 +18,18 @@ data class AssetCard(
     val isCollected: Boolean,
 
     @SerializedName("created_at")
-    val createdAt: String, // 简化处理，直接用字符串接收时间
+    val createdAt: String,
 
-    val status: String
+    val status: String,
+
+    val height: Int,
+
+    @SerializedName("owner_id")
+    val ownerId: Int,
+
+    @SerializedName("downloaded_at")
+    val downloadedAt: String? = null
+
 ) {
 
     val randomHeightDp: Int

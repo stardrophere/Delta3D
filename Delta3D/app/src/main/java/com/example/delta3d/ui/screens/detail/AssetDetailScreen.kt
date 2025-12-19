@@ -1,13 +1,17 @@
 package com.example.delta3d.ui.screens.detail
 
+import android.app.DownloadManager
+import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.util.Log
-import android.widget.MediaController
-import android.widget.VideoView
-import androidx.annotation.OptIn
+import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,36 +24,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.delta3d.api.AssetDetail
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.ui.components.GlassyFeedbackPopup
+import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
-import com.example.delta3d.ui.screens.home.TagCapsule
 import com.example.delta3d.ui.screens.home.TagColorBinder
 import com.example.delta3d.ui.screens.home.TagPalette
 import com.example.delta3d.ui.session.SessionViewModel
-import kotlin.random.Random
-import androidx.compose.animation.core.*
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.Info
-import coil.compose.AsyncImage
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import kotlinx.coroutines.launch
 
 // --- 样式常量 ---
 private val AccentColor = Color(0xFF64FFDA) // 青色高亮
@@ -57,7 +60,7 @@ private val WarningColor = Color(0xFFFFAB40) // 橙色警告/处理中
 private val ErrorColor = Color(0xFFFF5252)   // 红色错误
 private val SurfaceColor = Color(0xFF1E1E1E) // 深色背景
 private val GlassDockColor = Color(0xFF1E1E1E).copy(alpha = 0.90f)
-private val CardBgColor = Color(0xFF2C2C2C).copy(alpha = 0.6f) // 半透明卡片底
+private val CardBgColor = Color(0xFF2C2C2C).copy(alpha = 0.6f)
 
 private val GlassBorder = Brush.verticalGradient(
     colors = listOf(Color.White.copy(0.15f), Color.White.copy(0.05f))
@@ -69,10 +72,16 @@ fun AssetDetailScreen(
     onBack: () -> Unit,
     sessionVm: SessionViewModel,
     onPreviewClick: () -> Unit,
+    onNavigateToPublish: (Int) -> Unit,
     detailVm: AssetDetailViewModel = viewModel()
 ) {
     val token by sessionVm.token.collectAsState()
     val uiState by detailVm.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // 引入 Feedback
+    val feedbackState = rememberFeedbackState()
+    val scope = rememberCoroutineScope()
 
     // 弹窗状态
     var showDownloadDialog by remember { mutableStateOf(false) }
@@ -87,6 +96,27 @@ fun AssetDetailScreen(
         token?.let { if (it.isNotEmpty()) detailVm.loadDetail(it, assetId) }
     }
     val tagColorBinder = remember { TagColorBinder(TagPalette) }
+
+    // 下载事件
+    LaunchedEffect(Unit) {
+        detailVm.downloadEvent.collect { event ->
+            when (event) {
+                is DownloadEvent.Success -> {
+                    // 调用系统下载管理器
+                    startSystemDownload(context, event.url, event.filename, onError = { msg ->
+                        scope.launch { feedbackState.showError(msg) }
+                    })
+                    feedbackState.showSuccess("Starting download: ${event.filename}")
+
+
+                }
+
+                is DownloadEvent.Error -> {
+                    feedbackState.showError(event.msg)
+                }
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedGradientBackground() // 背景
@@ -130,14 +160,14 @@ fun AssetDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(bottom = 140.dp) // 给底部悬浮栏留出更多空间
+                        .padding(bottom = 140.dp)
                 ) {
-                    // 1. 视频区域
+                    // 视频区域
                     ImageCarouselHeader(videoUrl = detail.videoUrl)
 
                     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)) {
 
-                        // 1) 标题
+                        // 标题
                         Text(
                             text = detail.title,
                             color = Color.White,
@@ -148,7 +178,7 @@ fun AssetDetailScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // 2) 标签（调大 + 加粗）
+                        // 标签
                         if (detail.tags.isNotEmpty()) {
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -157,30 +187,32 @@ fun AssetDetailScreen(
                                 detail.tags.forEach { tag ->
                                     TagCapsuleHere(
                                         text = tag,
-                                        baseColor = tagColorBinder.colorFor(tag),
-                                        // 如果你的 TagCapsule 还没支持这俩参数，就看下面“TagCapsule 改法”
-//                                        fontSize = 14.sp,
-//                                        fontWeight = FontWeight.SemiBold
+                                        baseColor = tagColorBinder.colorFor(tag)
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.height(18.dp))
                         }
 
-                        // 3) 时间线
+                        // 时间线
                         ProcessingTimeline(
                             status = detail.status,
-                            createdAt = detail.createdAt
+                            createdAt = detail.createdAt,
+                            estimatedSeconds = detail.estimatedGenSeconds,
+                            // 传入轮询触发器
+                            onCheckStatus = {
+                                token?.let { detailVm.refreshDetail(it, assetId) }
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(22.dp))
 
-                        // 4) Tech Specs
+                        // Tech Specs
                         TechSpecsCard(detail)
 
                         Spacer(modifier = Modifier.height(18.dp))
 
-                        //描述
+                        // 描述
                         Box(modifier = Modifier.padding(start = 10.dp)) {
                             DetailSection(
                                 title = "Description",
@@ -198,12 +230,10 @@ fun AssetDetailScreen(
                                 )
                             }
                         }
-
                     }
-
                 }
 
-                // --- 顶部导航栏 (透明覆盖) ---
+                // --- 顶部导航栏 ---
                 TopNavBar(
                     onBack = onBack,
                     onMenuClick = { showMenu = true },
@@ -226,14 +256,11 @@ fun AssetDetailScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 24.dp, vertical = 40.dp) // 往上提了一点
+                        .padding(horizontal = 24.dp, vertical = 40.dp)
                 ) {
                     GlassBottomDock(
                         onPreview = {
-                            Log.d(
-                                "TRACK_ID",
-                                "1. [DetailScreen] 点击按钮, 准备跳转 ID: $assetId"
-                            ) // 🟢 加在这里
+                            Log.d("TRACK_ID", "1. [DetailScreen] 点击按钮, 准备跳转 ID: $assetId")
                             onPreviewClick()
                         },
                         onDownload = { showDownloadDialog = true },
@@ -248,23 +275,34 @@ fun AssetDetailScreen(
                         onDismiss = { showDownloadDialog = false },
                         onDownload = { format ->
                             showDownloadDialog = false
-                            // TODO: 触发真实下载逻辑，带上格式
+                            // 🟢 触发 ViewModel 的下载逻辑
+                            token?.let {
+                                detailVm.downloadAsset(it, assetId, format)
+                            }
                         }
                     )
                 }
 
+                //分享弹窗
+
                 if (showShareDialog) {
-                    CustomGlassDialog(
+                    ShareActionDialog(
                         title = "Share Asset",
-                        text = "Public Link: ${RetrofitClient.BASE_URL}share/${detail.id}",
-                        confirmText = "Copy Link",
+                        link = "${RetrofitClient.BASE_URL}share/${uiState.let { (it as? DetailUiState.Success)?.data?.id ?: 0 }}",
                         onDismiss = { showShareDialog = false },
-                        onConfirm = { showShareDialog = false }
+                        onCopyLink = {
+                            // 复制链接逻辑.
+                            showShareDialog = false
+                        },
+                        onPostToCommunity = {
+                            showShareDialog = false
+                            // 触发跳转
+                            onNavigateToPublish(assetId)
+                        }
                     )
                 }
 
                 if (showEditDialog) {
-                    // TODO: 这里可以放一个输入框弹窗，简化起见复用 CustomGlassDialog 示意
                     CustomGlassDialog(
                         title = "Edit Info",
                         text = "Edit title, tags and description functionality would go here.",
@@ -275,8 +313,145 @@ fun AssetDetailScreen(
                 }
             }
         }
+
+        // 反馈组件
+        GlassyFeedbackPopup(
+            state = feedbackState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
+
+
+@Composable
+fun ShareActionDialog(
+    title: String,
+    link: String,
+    onDismiss: () -> Unit,
+    onCopyLink: () -> Unit,
+    onPostToCommunity: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(listOf(Color.White.copy(0.1f), Color.White.copy(0.05f))),
+                    RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF252525).copy(alpha = 0.95f))
+                .padding(24.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // 选项 1: 发布到社区 (高亮强调)
+                Button(
+                    onClick = onPostToCommunity,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64FFDA)), // 青色高亮
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Public, contentDescription = null, tint = Color.Black)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Post to Community",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = Color.White.copy(0.1f)
+                    )
+                    Text(
+                        " OR ",
+                        color = Color.White.copy(0.3f),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = Color.White.copy(0.1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 选项 2: 复制链接
+                Button(
+                    onClick = onCopyLink,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.08f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Outlined.Link, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Copy Public Link", color = Color.White)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = Color.White.copy(0.5f))
+                }
+            }
+        }
+    }
+}
+
+
+// 系统下载管理器辅助函数
+fun startSystemDownload(
+    context: Context,
+    relativeUrl: String,
+    fileName: String,
+    onError: (String) -> Unit
+) {
+    try {
+        val baseUrl = RetrofitClient.BASE_URL.removeSuffix("/")
+
+
+        val cleanPath = relativeUrl.replace("\\", "/").removePrefix("/")
+
+
+        val fullUrl = "$baseUrl/$cleanPath"
+
+
+
+        Log.d("Download", "Final URL: $fullUrl")
+
+        val request = DownloadManager.Request(Uri.parse(fullUrl)).apply {
+            setTitle(fileName)
+            setDescription("Downloading 3D Asset...")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+        }
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        downloadManager.enqueue(request)
+
+    } catch (e: Exception) {
+        e.printStackTrace()
+        onError("System Download Failed: ${e.message}")
+    }
+}
+
 
 // ------------------------------------
 // 组件：顶部导航与菜单
@@ -292,7 +467,7 @@ fun TopNavBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 40.dp, start = 16.dp, end = 16.dp), // 适配状态栏
+            .padding(top = 40.dp, start = 16.dp, end = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -345,7 +520,7 @@ fun TopNavBar(
 }
 
 // ------------------------------------
-// 组件：状态时间线 (Timeline) - prettier version
+// 组件：状态时间线
 // ------------------------------------
 private data class TimelineStep(
     val title: String,
@@ -353,8 +528,21 @@ private data class TimelineStep(
 )
 
 @Composable
-fun ProcessingTimeline(status: String, createdAt: String) {
+fun ProcessingTimeline(
+    status: String,
+    createdAt: String,
+    estimatedSeconds: Int? = 60,
+    onCheckStatus: () -> Unit = {}
+) {
     val s = status.trim().lowercase()
+
+    // --- 状态判定 ---
+    val isCompleted = s == "completed" || s == "ready" || s == "done" || s == "success"
+    val isFailed = s == "failed" || s == "error"
+    val isPending = s == "pending" || s == "queued"
+    val isProcessing = s == "processing"
+
+    val safeEstimatedSeconds = estimatedSeconds ?: 60
 
     val steps = remember {
         listOf(
@@ -364,45 +552,81 @@ fun ProcessingTimeline(status: String, createdAt: String) {
         )
     }
 
-    val isFailed = s == "failed" || s == "error"
-    val currentStepIndex = when (s) {
-        "pending" -> 0
-        "processing" -> 1
-        "completed", "ready", "done", "success" -> 2
-        "failed", "error" -> 1 // 失败一般发生在 processing；你也可以按后端语义改
-        else -> 0
-    }.coerceIn(0, steps.lastIndex)
+    // --- 核心进度逻辑 ---
+    var progressTarget by remember { mutableFloatStateOf(0f) }
+    var lastPollTime by remember { mutableLongStateOf(0L) }
 
-    val progressTarget =
-        if (steps.size <= 1) 0f else (currentStepIndex.toFloat() / (steps.size - 1).toFloat())
-    val progress by animateFloatAsState(
+    LaunchedEffect(s, createdAt, safeEstimatedSeconds) {
+        when {
+            isCompleted -> {
+                progressTarget = 1.0f
+            }
+
+            isFailed -> {
+                progressTarget = 0.1f
+            }
+
+            isPending -> {
+                progressTarget = 0.05f
+            }
+
+            isProcessing -> {
+                while (true) {
+                    val rawRatio = calculateRawProgress(createdAt, safeEstimatedSeconds)
+
+                    progressTarget = if (rawRatio <= 1.0f) {
+                        0.05f + (rawRatio * 0.90f)
+                    } else {
+                        val overtime = rawRatio - 1.0f
+                        val curve = overtime / (overtime + 3.0f)
+                        0.95f + (curve * 0.04f)
+                    }
+
+                    if (rawRatio >= 1.0f) {
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastPollTime > 3000) {
+                            onCheckStatus()
+                            lastPollTime = currentTime
+                        }
+                    }
+                    delay(100)
+                }
+            }
+        }
+    }
+
+    val animatedProgress by animateFloatAsState(
         targetValue = progressTarget,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 500, easing = LinearEasing),
         label = "timelineProgress"
     )
 
-    val pillColor = when {
-        isFailed -> ErrorColor
-        currentStepIndex == 0 -> Color.White.copy(0.65f)
-        currentStepIndex == 1 -> WarningColor
-        else -> AccentColor
-    }
-    val pillText = when {
-        isFailed -> "FAILED"
-        currentStepIndex == 0 -> "QUEUED"
-        currentStepIndex == 1 -> "PROCESSING"
-        else -> "READY"
-    }
-    val pillIcon = when {
-        isFailed -> Icons.Outlined.ErrorOutline
-        currentStepIndex == 0 -> Icons.Outlined.Schedule
-        currentStepIndex == 1 -> Icons.Outlined.Timelapse
-        else -> Icons.Outlined.CheckCircle
+    val currentStepIndex = when {
+        isCompleted -> 2
+        isProcessing -> 1
+        else -> 0
     }
 
-    val displayTime = runCatching {
-        createdAt.replace("T", " ").substringBeforeLast(".")
-    }.getOrElse { createdAt }
+    val pillColor = when {
+        isFailed -> ErrorColor
+        isCompleted -> AccentColor
+        isProcessing -> WarningColor
+        else -> Color.White.copy(0.65f)
+    }
+
+    val pillText = when {
+        isFailed -> "FAILED"
+        isCompleted -> "READY"
+        isProcessing -> "PROCESSING ${(animatedProgress * 100).toInt()}%"
+        else -> "QUEUED"
+    }
+
+    val pillIcon = when {
+        isFailed -> Icons.Outlined.ErrorOutline
+        isCompleted -> Icons.Outlined.CheckCircle
+        isProcessing -> Icons.Outlined.Timelapse
+        else -> Icons.Outlined.Schedule
+    }
 
     Column(
         modifier = Modifier
@@ -434,26 +658,24 @@ fun ProcessingTimeline(status: String, createdAt: String) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
-
             StatusPill(text = pillText, color = pillColor, icon = pillIcon)
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         // Track + Nodes
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(60.dp)
         ) {
-            // Track (behind nodes)
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val n = steps.size.coerceAtLeast(2)
+                val n = steps.size
                 val startX = size.width / (n * 2f)
                 val endX = size.width - startX
                 val y = size.height / 2f
+                val totalWidth = endX - startX
 
-                // base line
                 drawLine(
                     color = Color.White.copy(alpha = 0.10f),
                     start = Offset(startX, y),
@@ -461,60 +683,43 @@ fun ProcessingTimeline(status: String, createdAt: String) {
                     strokeWidth = 6f
                 )
 
-                val progressX = startX + (endX - startX) * progress
+                val currentBarWidth = totalWidth * animatedProgress
+                val progressEndX = startX + currentBarWidth
 
                 if (isFailed) {
-                    drawLine(
-                        color = ErrorColor.copy(alpha = 0.9f),
-                        start = Offset(startX, y),
-                        end = Offset(progressX, y),
-                        strokeWidth = 6f
-                    )
+                    drawLine(Color.Red.copy(0.8f), Offset(startX, y), Offset(progressEndX, y), 6f)
                 } else {
                     drawLine(
                         brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                AccentColor.copy(alpha = 0.35f),
-                                AccentColor.copy(alpha = 0.95f)
-                            )
+                            colors = listOf(AccentColor.copy(0.3f), AccentColor),
+                            startX = startX, endX = progressEndX
                         ),
-                        start = Offset(startX, y),
-                        end = Offset(progressX, y),
-                        strokeWidth = 6f
+                        start = Offset(startX, y), end = Offset(progressEndX, y), strokeWidth = 6f
                     )
                 }
             }
 
-            // Nodes
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxSize()) {
                 steps.forEachIndexed { index, step ->
-                    val isActive = index <= currentStepIndex && !isFailed
-                    val isCurrent = index == currentStepIndex
-                    val isDim = !isActive && !isCurrent
+                    val nodePos = index.toFloat() / (steps.size - 1)
+                    val isPassed = animatedProgress >= (nodePos - 0.05f)
+                    val isActive = if (isFailed) index < currentStepIndex else isPassed
 
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         TimelineNode(
-                            icon = step.icon,
-                            active = isActive,
-                            current = isCurrent,
-                            failed = isFailed && isCurrent
+                            step.icon,
+                            isActive,
+                            index == currentStepIndex && !isCompleted && !isFailed,
+                            isFailed && index == currentStepIndex
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = step.title,
-                            color = when {
-                                isFailed && isCurrent -> ErrorColor
-                                isDim -> Color.White.copy(0.35f)
-                                else -> Color.White
-                            },
-                            fontSize = 11.sp,
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                            step.title,
+                            color = if (isActive) Color.White else Color.White.copy(0.3f),
+                            fontSize = 11.sp
                         )
                     }
                 }
@@ -523,20 +728,36 @@ fun ProcessingTimeline(status: String, createdAt: String) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Footer time
+        // Footer Text
+        val infoText = remember(s, animatedProgress, safeEstimatedSeconds) {
+            when {
+                isFailed -> "Processing failed."
+                isCompleted -> "Created at ${formatUtcToGmt8YmdHm(createdAt)}."
+                isPending -> "Waiting for server..."
+                isProcessing -> {
+                    val rawRatio = calculateRawProgress(createdAt, safeEstimatedSeconds)
+                    if (rawRatio >= 1.0f) {
+                        "Please wait..."
+                    } else {
+                        val remaining =
+                            ((1f - rawRatio) * safeEstimatedSeconds).toInt().coerceAtLeast(1)
+                        "Estimated time remaining: ${remaining}s"
+                    }
+                }
+
+                else -> "Status: $s"
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Default.AccessTime,
-                contentDescription = null,
+                null,
                 tint = Color.White.copy(0.5f),
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (isFailed) "Failed at $displayTime" else "Last updated: $displayTime",
-                color = if (isFailed) ErrorColor else Color.White.copy(0.55f),
-                fontSize = 11.sp
-            )
+            Text(infoText, color = Color.White.copy(0.55f), fontSize = 11.sp)
         }
     }
 }
@@ -577,11 +798,9 @@ private fun TimelineNode(icon: ImageVector, active: Boolean, current: Boolean, f
         else -> Color.White.copy(0.10f)
     }
 
-    // 呼吸光圈（只给当前节点）
     val infinite = rememberInfiniteTransition(label = "nodePulse")
     val pulseAlpha by infinite.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.0f,
+        initialValue = 0.35f, targetValue = 0.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
@@ -589,8 +808,7 @@ private fun TimelineNode(icon: ImageVector, active: Boolean, current: Boolean, f
         label = "pulseAlpha"
     )
     val pulseScale by infinite.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.55f,
+        initialValue = 1.0f, targetValue = 1.55f,
         animationSpec = infiniteRepeatable(
             animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
@@ -623,11 +841,9 @@ private fun TimelineNode(icon: ImageVector, active: Boolean, current: Boolean, f
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = icon,
-                    contentDescription = null,
+                    imageVector = icon, contentDescription = null,
                     tint = when {
-                        failed -> Color.Black
-                        active || current -> Color.Black
+                        failed || active || current -> Color.Black
                         else -> Color.White.copy(0.55f)
                     },
                     modifier = Modifier.size(if (current) 16.dp else 14.dp)
@@ -637,138 +853,61 @@ private fun TimelineNode(icon: ImageVector, active: Boolean, current: Boolean, f
     }
 }
 
-
 // ------------------------------------
-// 组件：技术参数卡片 (Tech Specs)
-// ------------------------------------
-// ------------------------------------
-// 组件：增强版技术参数卡片 (Tech Specs)
+// 组件：技术参数卡片
 // ------------------------------------
 @Composable
 fun TechSpecsCard(detail: AssetDetail) {
-    // --- 1. 模拟更丰富的硬核数据 ---
-    // 使用 remember(detail.id) 确保数据对于同一个物品是固定的，不会乱跳
-    val rnd = remember(detail.id) { kotlin.random.Random(detail.id.hashCode()) }
+    val s = detail.status.trim().lowercase()
+    val isCompleted = s == "completed" || s == "ready" || s == "done" || s == "success"
 
-    val isRigged = remember(detail.id) { rnd.nextFloat() < 0.45f }
-    val hasAnim = remember(detail.id) { isRigged && rnd.nextFloat() < 0.75f }
+    val specs = remember(detail.id, isCompleted) {
+        if (!isCompleted) {
+            listOf(
+                SpecItemData("Format", "N/A"), SpecItemData("File Size", "N/A"),
+                SpecItemData("Triangles", "N/A"), SpecItemData("Vertices", "N/A"),
+                SpecItemData("Materials", "N/A"), SpecItemData("Texture Res", "N/A"),
+                SpecItemData("Rigging", "N/A"), SpecItemData("Animation", "N/A"),
+                SpecItemData("UV Layout", "N/A"), SpecItemData("Shader", "N/A")
+            )
+        } else {
+            val rnd = kotlin.random.Random(detail.id.hashCode())
+            val isRigged = rnd.nextFloat() < 0.45f
+            val hasAnim = isRigged && rnd.nextFloat() < 0.75f
+            val textureRes = listOf("512x512", "1024x1024", "2048x2048", "4096x4096").random(rnd)
+            val trianglesK = rnd.nextInt(20, 9000)
+            val verticesK =
+                (trianglesK * (0.48 + rnd.nextDouble() * 0.25)).toInt().coerceAtLeast(10)
+            val materials = rnd.nextInt(1, 17)
+            val animClips = if (!hasAnim) 0 else rnd.nextInt(1, 60)
+            val uvLayout = listOf("Non-Overlapping", "UDIM", "Triplanar").random(rnd)
+            val shader = listOf("Standard", "PBR", "Unlit", "SSS").random(rnd)
+            val format = ".msgpack"
+            val fileSizeMb = rnd.nextDouble() * 100.0 + 10.0
 
-    val textureRes = remember(detail.id) {
-        listOf("512x512", "1024x1024", "2048x2048", "4096x4096", "4096x2048").random(rnd)
-    }
-
-    val trianglesK = remember(detail.id) {
-        // 分段更像真实：大多数在中间段
-        val bucket = rnd.nextInt(100)
-        when {
-            bucket < 25 -> rnd.nextInt(20, 220)        // 轻量 20k-220k
-            bucket < 85 -> rnd.nextInt(220, 1800)      // 常见 220k-1800k
-            else -> rnd.nextInt(1800, 9000)            // 重型 1.8M-9M
+            listOf(
+                SpecItemData("Format", format),
+                SpecItemData("File Size", String.format("%.2f MB", fileSizeMb)),
+                SpecItemData("Triangles", "${trianglesK}k"),
+                SpecItemData("Vertices", "${verticesK}k"),
+                SpecItemData("Materials", "$materials Sets"),
+                SpecItemData("Texture Res", textureRes),
+                SpecItemData("Rigging", if (isRigged) "Humanoid" else "Static"),
+                SpecItemData("Animation", if (hasAnim) "$animClips Clips" else "N/A"),
+                SpecItemData("UV Layout", uvLayout),
+                SpecItemData("Shader", shader)
+            )
         }
     }
-
-    val verticesK = remember(detail.id) {
-        val ratio = 0.48 + rnd.nextDouble() * 0.25    // 0.48~0.73
-        (trianglesK * ratio).toInt().coerceAtLeast(10)
-    }
-
-    val materials = remember(detail.id) {
-        // 1~16，偏向 1~6
-        val bucket = rnd.nextInt(100)
-        when {
-            bucket < 60 -> rnd.nextInt(1, 7)
-            bucket < 90 -> rnd.nextInt(7, 11)
-            else -> rnd.nextInt(11, 17)
-        }
-    }
-
-    val animClips = remember(detail.id) {
-        if (!hasAnim) 0 else {
-            val bucket = rnd.nextInt(100)
-            when {
-                bucket < 40 -> rnd.nextInt(1, 8)
-                bucket < 85 -> rnd.nextInt(8, 28)
-                else -> rnd.nextInt(28, 61)
-            }
-        }
-    }
-
-    val uvLayout = remember(detail.id) {
-        listOf(
-            "Non-Overlapping",
-            "Overlapping (Mirrored)",
-            "UDIM (2 Tiles)",
-            "UDIM (4 Tiles)",
-            "UDIM (8 Tiles)",
-            "Triplanar (No UV)"
-        ).random(rnd)
-    }
-
-    val shader = remember(detail.id) {
-        listOf(
-            "Standard Surface",
-            "PBR Metallic-Roughness",
-            "Unlit",
-            "Toon",
-            "Glass / Transmission",
-            "SSS (Skin)"
-        ).random(rnd)
-    }
-
-    val format = remember(detail.id) {
-        listOf(".msgpack (v1.0)", ".msgpack (v2.0)", ".msgpack (v2.1)").random(rnd)
-    }
-
-    val fileSizeMb = remember(detail.id) {
-        // 粗略估：基础 + (贴图档位) + (面数档位) + (动画开销)
-        val texFactor = when {
-            textureRes.startsWith("512") -> 10.0
-            textureRes.startsWith("1024") -> 18.0
-            textureRes.startsWith("2048") -> 35.0
-            textureRes.startsWith("4096") -> 90.0
-            textureRes.startsWith("8192") -> 220.0
-            else -> 70.0 // 4096x2048
-        }
-        val geoFactor = trianglesK / 35.0               // 三角面越多越大
-        val animFactor = if (hasAnim) animClips * 2.8 else 0.0
-        val matFactor = materials * 6.5
-
-        val base = 8.0 + rnd.nextDouble() * 10.0
-        (base + texFactor + geoFactor + animFactor + matFactor).coerceIn(8.0, 650.0)
-    }
-
-    val specs = remember(detail.id) {
-        listOf(
-            SpecItemData("Format", format),
-            SpecItemData("File Size", String.format("%.2f MB", fileSizeMb)),
-
-            SpecItemData("Triangles", "${trianglesK}k"),
-            SpecItemData("Vertices", "${verticesK}k"),
-
-            SpecItemData("Materials", "$materials PBR Sets"),
-            SpecItemData("Texture Res", textureRes),
-
-            SpecItemData(
-                "Rigging",
-                if (isRigged) "Humanoid (${rnd.nextInt(45, 150)} Bones)" else "Static Mesh"
-            ),
-            SpecItemData("Animation", if (hasAnim) "$animClips Clips" else "N/A"),
-
-            SpecItemData("UV Layout", uvLayout),
-            SpecItemData("Shader", shader)
-        )
-    }
-
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .border(1.dp, Color.White.copy(0.08f), RoundedCornerShape(16.dp))
-            .background(CardBgColor) // 你的深色半透明背景
+            .background(CardBgColor)
             .padding(20.dp)
     ) {
-        // 卡片标题
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Outlined.Analytics,
@@ -785,7 +924,6 @@ fun TechSpecsCard(detail: AssetDetail) {
                 letterSpacing = 1.2.sp
             )
             Spacer(modifier = Modifier.weight(1f))
-            // 可以加个小图标表示数据来源
             Icon(
                 Icons.Outlined.Info,
                 null,
@@ -796,10 +934,7 @@ fun TechSpecsCard(detail: AssetDetail) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- 2. 渲染网格 ---
-        // 这里使用简单的 Column + Row 模拟 Grid，每行放2个，保证对齐
         val chunkedSpecs = specs.chunked(2)
-
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             chunkedSpecs.forEach { rowItems ->
                 Row(
@@ -807,23 +942,20 @@ fun TechSpecsCard(detail: AssetDetail) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     rowItems.forEach { item ->
-                        // 每一个格子占据一半宽度 (weight 1f)
-                        TechSpecGridItem(item, modifier = Modifier.weight(1f))
+                        TechSpecGridItem(
+                            item,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                    // 如果最后一行只有一个，补一个空的占位符保持对齐
-                    if (rowItems.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+                    if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
     }
 }
 
-// 数据类，方便管理
 data class SpecItemData(val label: String, val value: String)
 
-// 单个格子的 UI
 @Composable
 fun TechSpecGridItem(item: SpecItemData, modifier: Modifier = Modifier) {
     Column(
@@ -833,7 +965,7 @@ fun TechSpecGridItem(item: SpecItemData, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Text(
-            text = item.label.uppercase(),
+            item.label.uppercase(),
             color = Color.White.copy(0.4f),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -841,28 +973,13 @@ fun TechSpecGridItem(item: SpecItemData, modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = item.value,
+            item.value,
             color = Color.White.copy(0.9f),
             fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-fun SpecItem(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(text = label, color = Color.White.copy(0.4f), fontSize = 11.sp)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            color = Color.White.copy(0.9f),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
         )
     }
 }
@@ -876,7 +993,7 @@ fun DownloadFormatDialog(
     onDismiss: () -> Unit,
     onDownload: (String) -> Unit
 ) {
-    val formats = listOf("OBJ (Universal)", "GLB (Web/AR)", "PLY (Point Cloud)")
+    val formats = listOf("OBJ (Universal)", "GLB (Web/AR)", "PLY (Point Cloud)", "SOURCE DATA")
     var selectedOption by remember { mutableStateOf(formats[0]) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -912,15 +1029,13 @@ fun DownloadFormatDialog(
                             .clip(RoundedCornerShape(8.dp))
                             .selectable(
                                 selected = (selectedOption == format),
-                                onClick = { selectedOption = format }
-                            )
+                                onClick = { selectedOption = format })
                             .background(if (selectedOption == format) AccentColor.copy(0.1f) else Color.Transparent)
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = (selectedOption == format),
-                            onClick = null,
+                            selected = (selectedOption == format), onClick = null,
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = AccentColor,
                                 unselectedColor = Color.Gray
@@ -982,25 +1097,19 @@ fun DetailSection(title: String, content: String, isItalic: Boolean = false) {
 }
 
 // ------------------------------------
-// 组件：顶部图片轮播 (Carousel)
+// 组件：顶部图片轮播
 // ------------------------------------
 @Composable
-fun ImageCarouselHeader(
-    videoUrl: String?,
-    modifier: Modifier = Modifier
-) {
-    // 1. 生成 5 张随机图片 URL
+fun ImageCarouselHeader(videoUrl: String?, modifier: Modifier = Modifier) {
     val imageUrls = remember(videoUrl) {
-        if (videoUrl == null) emptyList()
-        else generateRandomImageUrls(videoUrl, count = 5)
+        if (videoUrl == null) emptyList() else generateRandomImageUrls(videoUrl, count = 5)
     }
 
-    // 如果没有图片（URL为空），显示占位
     if (imageUrls.isEmpty()) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(250.dp) // 固定高度
+                .height(250.dp)
                 .background(Color(0xFF1E1E1E)),
             contentAlignment = Alignment.Center
         ) {
@@ -1014,18 +1123,15 @@ fun ImageCarouselHeader(
         return
     }
 
-    // 2. Pager 状态
     val pagerState = rememberPagerState(pageCount = { imageUrls.size })
 
-    // 3. 自动轮播逻辑
     LaunchedEffect(pagerState) {
         while (true) {
-            kotlinx.coroutines.delay(1300) // 2s切换
+            delay(2500)
             try {
                 val nextPage = (pagerState.currentPage + 1) % imageUrls.size
                 pagerState.animateScrollToPage(nextPage)
             } catch (e: Exception) {
-                // 忽略页面销毁时的异常
             }
         }
     }
@@ -1033,24 +1139,19 @@ fun ImageCarouselHeader(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(280.dp) // ✅ 固定高度，你可以根据需要调整 (如 300.dp)
+            .height(280.dp)
     ) {
-        // 4. 轮播内容
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             AsyncImage(
                 model = imageUrls[page],
                 contentDescription = "Preview Image $page",
-                contentScale = ContentScale.Crop, // ✅ 裁剪填满
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black) // 图片加载前的底色
+                    .background(Color.Black)
             )
         }
 
-        // 5. 底部渐变遮罩 (让指示器更清晰)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1058,12 +1159,14 @@ fun ImageCarouselHeader(
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.6f)
+                        )
                     )
                 )
         )
 
-        // 6. 指示器 (Dots)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1072,58 +1175,35 @@ fun ImageCarouselHeader(
         ) {
             repeat(imageUrls.size) { iteration ->
                 val isSelected = pagerState.currentPage == iteration
-                // 选中的是长条，未选中是圆点
                 val width = if (isSelected) 24.dp else 8.dp
                 val color = if (isSelected) AccentColor else Color.White.copy(alpha = 0.5f)
-
                 Box(
                     modifier = Modifier
                         .height(8.dp)
                         .width(width)
                         .clip(CircleShape)
                         .background(color)
-                        .animateContentSize() // 宽度变化的动画
+                        .animateContentSize()
                 )
             }
         }
     }
 }
 
-// 辅助逻辑：生成图片 URL 列表
 private fun generateRandomImageUrls(baseUrlRaw: String, count: Int): List<String> {
-    // 1. 处理 Base URL (确保是绝对路径)
-    val baseUrl = if (baseUrlRaw.startsWith("http", ignoreCase = true)) {
-        baseUrlRaw
-    } else {
-        "${RetrofitClient.BASE_URL.removeSuffix("/")}/${baseUrlRaw.removePrefix("/")}"
-    }
+    val baseUrl = if (baseUrlRaw.startsWith("http", ignoreCase = true)) baseUrlRaw
+    else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${baseUrlRaw.removePrefix("/")}"
 
-    // 2. 移除可能存在的 .mp4 后缀或 query 参数，获取纯净目录路径
-    // 假设 videoUrl 类似 ".../assets/123/video.mp4" 或 ".../assets/123"
-    // 我们需要的是 ".../assets/123"
     val cleanBase = baseUrl.substringBefore("?").substringBeforeLast("/video.mp4")
-
-    // 3. 随机生成 5 个不重复的序号 (1~100)
-    // 使用 seed 确保每次 recompose 不会乱变，但这里因为是 remember(videoUrl) 所以只会在进入页面时生成一次
     val indices = (1..100).shuffled().take(count).sorted()
-
-    // 4. 拼接 URL
     return indices.map { index ->
-        // 格式化为 0001.jpg, 0045.jpg 等
         val fileName = "%04d.jpg".format(index)
         "$cleanBase/images/$fileName"
     }
 }
 
-// ------------------------------------
-// 复用你之前的 Glass Dock，微调样式
-// ------------------------------------
 @Composable
-fun GlassBottomDock(
-    onPreview: () -> Unit,
-    onDownload: () -> Unit,
-    onShare: () -> Unit
-) {
+fun GlassBottomDock(onPreview: () -> Unit, onDownload: () -> Unit, onShare: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1167,9 +1247,6 @@ fun GlassBottomDock(
     }
 }
 
-// ------------------------------------
-// 组件：通用玻璃拟态弹窗
-// ------------------------------------
 @Composable
 fun CustomGlassDialog(
     title: String,
@@ -1198,7 +1275,6 @@ fun CustomGlassDialog(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1207,30 +1283,20 @@ fun CustomGlassDialog(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.1f)),
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Cancel", color = Color.White.copy(0.7f))
-                    }
+                    ) { Text("Cancel", color = Color.White.copy(0.7f)) }
                     Button(
                         onClick = onConfirm,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                         modifier = Modifier.weight(1f)
-                    ) {
-                        Text(confirmText, color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
+                    ) { Text(confirmText, color = Color.Black, fontWeight = FontWeight.Bold) }
                 }
             }
         }
     }
 }
 
-/**
- * 🏷️ 彩色胶囊标签（Detail页专用：更大更醒目）
- */
 @Composable
-fun TagCapsuleHere(
-    text: String,
-    baseColor: Color
-) {
+fun TagCapsuleHere(text: String, baseColor: Color) {
     Surface(
         color = baseColor.copy(alpha = 0.16f),
         shape = RoundedCornerShape(999.dp),
@@ -1243,5 +1309,36 @@ fun TagCapsuleHere(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
         )
+    }
+}
+
+fun calculateRawProgress(createdAtStr: String, estimatedSeconds: Int): Float {
+    return try {
+        val cleanTimeStr = createdAtStr.replace("T", " ").substringBefore(".")
+        val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        format.timeZone = TimeZone.getTimeZone("UTC")
+        val createdDate = format.parse(cleanTimeStr) ?: return 0f
+        val now = Date().time
+        val elapsedSeconds = (now - createdDate.time) / 1000f
+        if (estimatedSeconds <= 0) return 0f
+        elapsedSeconds / estimatedSeconds.toFloat()
+    } catch (e: Exception) {
+        0f
+    }
+}
+
+fun formatUtcToGmt8YmdHm(createdAtStr: String): String {
+    return try {
+        val clean = createdAtStr.replace("T", " ").substringBefore(".")
+        val parser = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val date = parser.parse(clean) ?: return createdAtStr
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+        }
+        formatter.format(date)
+    } catch (e: Exception) {
+        createdAtStr
     }
 }

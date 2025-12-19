@@ -1,6 +1,7 @@
 package com.example.delta3d.ui.screens.auth
 
 
+import android.R.attr.delay
 import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -34,7 +35,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.api.RegisterRequest
+import com.example.delta3d.ui.components.GlassyFeedbackPopup
+import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.session.SessionViewModel
+import kotlinx.coroutines.delay
 
 // --- 登录页面 ---
 @Composable
@@ -49,7 +53,9 @@ fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) } // 加载状态
 
     val context = LocalContext.current
-    val scope = rememberCoroutineScope() // 用于启动网络请求协程
+    val scope = rememberCoroutineScope()
+
+    val feedbackState = rememberFeedbackState()
 
     // 全局背景容器
     Box(modifier = Modifier.fillMaxSize()) {
@@ -68,7 +74,13 @@ fun LoginScreen(
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
-                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.3f), offset = Offset(4f, 4f), blurRadius = 8f))
+                style = TextStyle(
+                    shadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.3f),
+                        offset = Offset(4f, 4f),
+                        blurRadius = 8f
+                    )
+                )
             )
             Text("Welcome Back", fontSize = 18.sp, color = Color.White.copy(alpha = 0.7f))
 
@@ -81,9 +93,20 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    GlassyTextField(value = username, onValueChange = { username = it }, label = "Username", icon = Icons.Default.Person)
+                    GlassyTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = "Username",
+                        icon = Icons.Default.Person
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
-                    GlassyTextField(value = password, onValueChange = { password = it }, label = "Password", icon = Icons.Default.Lock, isPassword = true)
+                    GlassyTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "Password",
+                        icon = Icons.Default.Lock,
+                        isPassword = true
+                    )
                 }
             }
 
@@ -93,11 +116,11 @@ fun LoginScreen(
             Button(
                 onClick = {
                     if (username.isBlank() || password.isBlank()) {
-                        Toast.makeText(context, "请输入用户名和密码", Toast.LENGTH_SHORT).show()
+                        scope.launch { feedbackState.showError("Please enter your username and password") }
                         return@Button
                     }
 
-                    // 🚀 发起登录请求
+                    // 发起登录请求
                     scope.launch {
                         isLoading = true
                         try {
@@ -107,26 +130,35 @@ fun LoginScreen(
                             // LoginScreen 里 scope.launch 成功后：
                             sessionVm.login(response.accessToken)
                             println("Login Token: ${response.accessToken}")
+                            feedbackState.showSuccess("Welcome back, $username!")
 
-                            Toast.makeText(context, "登录成功！", Toast.LENGTH_SHORT).show()
+//                            Toast.makeText(context, "登录成功！", Toast.LENGTH_SHORT).show()
 
-                            // ✅ 跳转到主页
+
                             onLoginSuccess()
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            Toast.makeText(context, "登录失败: 请检查账号密码", Toast.LENGTH_SHORT).show()
+                            feedbackState.showError("Login failed: incorrect username or password")
                         } finally {
                             isLoading = false
                         }
                     }
                 },
                 enabled = !isLoading, // 加载中禁止点击
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0F2027))
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F2027)
+                )
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF0F2027))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color(0xFF0F2027)
+                    )
                 } else {
                     Text("LOGIN", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
@@ -137,6 +169,7 @@ fun LoginScreen(
                 Text("Don't have an account? Register", color = Color.White)
             }
         }
+        GlassyFeedbackPopup(state = feedbackState, modifier = Modifier.align(Alignment.TopCenter))
     }
 }
 
@@ -153,15 +186,24 @@ fun RegisterScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val feedbackState = rememberFeedbackState()
+
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedGradientBackground() // 复用背景
 
         Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Create Account", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(
+                "Create Account",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
             Spacer(modifier = Modifier.height(32.dp))
 
             Card(
@@ -172,7 +214,13 @@ fun RegisterScreen(
                 Column(modifier = Modifier.padding(24.dp)) {
                     GlassyTextField(username, { username = it }, "Username", Icons.Default.Person)
                     Spacer(modifier = Modifier.height(16.dp))
-                    GlassyTextField(password, { password = it }, "Password", Icons.Default.Lock, isPassword = true)
+                    GlassyTextField(
+                        password,
+                        { password = it },
+                        "Password",
+                        Icons.Default.Lock,
+                        isPassword = true
+                    )
                 }
             }
 
@@ -181,34 +229,43 @@ fun RegisterScreen(
             Button(
                 onClick = {
                     if (username.isBlank() || password.isBlank()) {
-                        Toast.makeText(context, "请填写完整信息", Toast.LENGTH_SHORT).show()
+                        scope.launch { feedbackState.showError("Please enter your username and password") }
                         return@Button
                     }
 
                     scope.launch {
                         isLoading = true
                         try {
-                            // 🚀 发起注册请求
+                            // 起注册请求
                             val request = RegisterRequest(username, password)
                             val response = RetrofitClient.api.register(request)
 
-                            Toast.makeText(context, "注册成功: ${response.username}", Toast.LENGTH_SHORT).show()
+                            feedbackState.showSuccess("Registration success: ${response.username}")
+                            delay(1000)
                             onRegisterSuccess() // 返回登录页
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            Toast.makeText(context, "注册失败，用户名可能已存在", Toast.LENGTH_SHORT).show()
+                            feedbackState.showError("Registration failed: the username may already exist")
                         } finally {
                             isLoading = false
                         }
                     }
                 },
                 enabled = !isLoading,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0F2027))
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F2027)
+                )
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF0F2027))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color(0xFF0F2027)
+                    )
                 } else {
                     Text("REGISTER NOW", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
@@ -219,17 +276,21 @@ fun RegisterScreen(
                 Text("Back to Login", color = Color.White.copy(alpha = 0.7f))
             }
         }
+        GlassyFeedbackPopup(state = feedbackState, modifier = Modifier.align(Alignment.TopCenter))
     }
 }
 
-// --- 你的自定义组件 (保持不变) ---
+
 @Composable
 fun AnimatedGradientBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "background")
     val targetOffset = with(LocalDensity.current) { 1000.dp.toPx() }
     val offset by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = targetOffset,
-        animationSpec = infiniteRepeatable(animation = tween(20000, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(
+            animation = tween(20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
         label = "offset"
     )
     val brush = Brush.linearGradient(
@@ -237,7 +298,11 @@ fun AnimatedGradientBackground() {
         start = Offset(offset, offset), end = Offset(offset + 1000f, offset + 1000f),
         tileMode = TileMode.Mirror
     )
-    Box(modifier = Modifier.fillMaxSize().background(brush))
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -254,7 +319,19 @@ fun GlassyTextField(
         value = value, onValueChange = onValueChange,
         label = { Text(label, color = Color.White.copy(alpha = 0.8f)) },
         leadingIcon = { Icon(icon, contentDescription = null, tint = Color.White) },
-        trailingIcon = if (isPassword) { { IconButton(onClick = { passwordVisible = !passwordVisible }) { Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null, tint = Color.White) } } } else null,
+        trailingIcon = if (isPassword) {
+            {
+                IconButton(onClick = {
+                    passwordVisible = !passwordVisible
+                }) {
+                    Icon(
+                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        null,
+                        tint = Color.White
+                    )
+                }
+            }
+        } else null,
         visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         singleLine = true, shape = RoundedCornerShape(50),
         colors = TextFieldDefaults.colors(

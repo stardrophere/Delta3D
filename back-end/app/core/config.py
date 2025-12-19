@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     # =========================================================
     # 4. 文件存储 (UPLOAD_DIR, DOMAIN)
     # =========================================================
-    # 给个默认值，防止 .env 没填导致报错
     UPLOAD_DIR: str = "./static/uploads"
     DOMAIN: str = "http://127.0.0.1:8000"
 
@@ -41,5 +40,4 @@ class Settings(BaseSettings):
 
 
 # 实例化配置对象 (单例模式)
-# 以后在其他文件里直接 import settings 就能用了
 settings = Settings()

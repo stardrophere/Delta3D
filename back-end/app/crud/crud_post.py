@@ -8,6 +8,8 @@ from app.models import (
 )
 from app.models import Visibility  #
 from app.schemas import PostCreate
+from fastapi import HTTPException
+from app.schemas import PostDetail, PostAssetInfo, CommentOut
 
 
 def get_posts_by_user(
@@ -58,24 +60,58 @@ def get_posts_by_user(
     return results
 
 
+# app/crud/crud_post.py
+
+# 1. 增加新的 import (or_, and_, col)
+from sqlmodel import Session, select, or_, and_, col
+from typing import List
+# ... 其他原本的 import 保持不变 ...
+from app.models import (
+    CommunityPost, ModelAsset, InteractionLike,
+    PostCollection, Comment, UserFollow, User, Visibility
+)
+
+
 def get_community_posts(session: Session, current_user_id: int) -> List[dict]:
     """
-    获取社区所有帖子，并填充当前用户的交互状态
+    【社区首页】获取帖子流
+    逻辑更新：
+    1. 显示 PUBLIC 帖子
+    2. 显示 FOLLOWERS 帖子 (如果当前用户关注了作者)
+    3. 显示当前用户自己的帖子
     """
-    # 1. 查出所有公开帖子 (按发布时间倒序)
-    # 也可以在这里加 .limit(20) 做分页
+
+    # =========================================================
+    # 获取我关注的所有用户 ID
+    # =========================================================
+    following_subquery = select(UserFollow.followed_id).where(
+        UserFollow.follower_id == current_user_id
+    )
+
     statement = (
         select(CommunityPost)
+        .where(
+            or_(
+                # 帖子是公开的
+                CommunityPost.visibility == Visibility.PUBLIC,
+
+                # 帖子仅粉丝可见，且作者ID在我的关注列表里
+                and_(
+                    CommunityPost.visibility == Visibility.FOLLOWERS,
+                    col(CommunityPost.user_id).in_(following_subquery)
+                ),
+
+                CommunityPost.user_id == current_user_id
+            )
+        )
         .order_by(CommunityPost.published_at.desc())
     )
+
+    # 执行查询
     posts = session.exec(statement).all()
 
     if not posts:
         return []
-
-    # =========================================================
-    # ★ 性能优化：预加载当前用户的交互数据 (避免 N+1 查询) ★
-    # =========================================================
 
     # A. 我点赞过的帖子ID
     liked_ids_stmt = select(InteractionLike.post_id).where(InteractionLike.user_id == current_user_id)
@@ -85,68 +121,63 @@ def get_community_posts(session: Session, current_user_id: int) -> List[dict]:
     collected_ids_stmt = select(PostCollection.post_id).where(PostCollection.user_id == current_user_id)
     my_collected_ids = set(session.exec(collected_ids_stmt).all())
 
-    # C. 我评论过的帖子ID (distinct去重)
+    # C. 我评论过的帖子ID
     commented_ids_stmt = select(Comment.post_id).where(Comment.user_id == current_user_id).distinct()
     my_commented_ids = set(session.exec(commented_ids_stmt).all())
 
     # D. 我关注的用户ID
-    # 注意 UserFollow 表结构: follower_id 是我, followed_id 是被关注的人
     following_ids_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == current_user_id)
     my_following_ids = set(session.exec(following_ids_stmt).all())
 
-    # =========================================================
     # 3. 组装数据
-    # =========================================================
     results = []
     for post in posts:
-        asset = post.asset  # 关联查询
-        author = post.author  # 关联查询
+        asset = post.asset
+        author = post.author
+
+        display_desc = post.content if post.content else asset.description
 
         results.append({
-            # 基础信息
             "post_id": post.id,
             "asset_id": asset.id,
             "title": asset.title,
             "cover_url": asset.video_path,
-            "description": post.content or asset.description,
+            "description": display_desc,
             "tags": asset.tags,
             "published_at": str(post.published_at),
-            "like_count": post.like_count,
             "view_count": post.view_count,
-
-            # 作者信息
+            "like_count": post.like_count,
+            "collect_count": post.collect_count,
+            "comment_count": post.comment_count,
             "owner_id": author.id,
             "owner_name": author.username,
             "owner_avatar": author.avatar_url,
-
-            # 交互状态 (O(1) 复杂度查找)
             "is_liked": post.id in my_liked_ids,
             "is_collected": post.id in my_collected_ids,
             "has_commented": post.id in my_commented_ids,
-
-            # 这里的判断逻辑：如果作者就是我自己，算作 False 还是 True 均可，这里暂定 False
             "is_following": author.id in my_following_ids
         })
 
     return results
 
 
-
+def get_post_by_asset_id(session: Session, asset_id: int) -> CommunityPost | None:
+    """检查某个 asset 是否已经被发布过"""
+    statement = select(CommunityPost).where(CommunityPost.asset_id == asset_id)
+    return session.exec(statement).first()
 
 
 def create_post(session: Session, user_id: int, post_in: PostCreate) -> CommunityPost:
-    """
-    创建新帖子
-    """
+    """创建新帖子"""
     db_post = CommunityPost(
         user_id=user_id,
         asset_id=post_in.asset_id,
         content=post_in.content,
-        visibility=Visibility(post_in.visibility),  # 转换字符串为枚举
+        # 将字符串 "public"/"private" 转换为枚举对象
+        visibility=Visibility(post_in.visibility),
         allow_download=post_in.allow_download,
-
+        # published_at 会由数据库默认值自动生成，也可以手动指定
     )
-
     session.add(db_post)
     session.commit()
     session.refresh(db_post)
@@ -156,90 +187,91 @@ def create_post(session: Session, user_id: int, post_in: PostCreate) -> Communit
 # --- 点赞 ---
 def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int]:
     """
-    切换帖子点赞
-    同时更新：
-    1. 帖子的 like_count
-    2. 帖子作者的 liked_total_count (获赞总数)
+    切换帖子点赞状态 (Toggle Like)
+
+    Returns:
+        (is_liked: bool, new_like_count: int)
     """
-    # 1. 查帖子
+    # 1. 查帖子 (不存在直接返回)
     post = session.get(CommunityPost, post_id)
     if not post:
         return False, 0
 
-    # 2. 查当前用户对该帖子的点赞记录
-    link = session.exec(
-        select(InteractionLike).where(
-            InteractionLike.user_id == user_id,
-            InteractionLike.post_id == post_id
-        )
-    ).first()
+    # 2. 查当前用户的点赞记录
+    statement = select(InteractionLike).where(
+        InteractionLike.user_id == user_id,
+        InteractionLike.post_id == post_id
+    )
+    like_record = session.exec(statement).first()
 
-    # 3. 查帖子的作者 (为了更新他的获赞数)
-    # 注意：post.author 可能还没加载，所以最好直接通过 id 查 user
+    # 3. 查作者 (用于更新作者的获赞总数)
     author = session.get(User, post.user_id)
 
-    if link:
-        # --- 取消点赞 ---
-        session.delete(link)
-        post.like_count -= 1  # 帖子赞数 -1
+    if like_record:
+        # --- 情况 A: 已点赞 -> 执行取消 ---
+        session.delete(like_record)
+        post.like_count = max(0, post.like_count - 1)  # 防止减成负数
         if author:
-            author.liked_total_count -= 1  # 作者获赞总数 -1
+            author.liked_total_count = max(0, author.liked_total_count - 1)
         is_active = False
     else:
-        # --- 点赞 ---
-        new_link = InteractionLike(user_id=user_id, post_id=post_id)
-        session.add(new_link)
-        post.like_count += 1  # 帖子赞数 +1
+        # --- 情况 B: 未点赞 -> 执行点赞 ---
+        new_record = InteractionLike(user_id=user_id, post_id=post_id)
+        session.add(new_record)
+        post.like_count += 1
         if author:
-            author.liked_total_count += 1  # 作者获赞总数 +1
+            author.liked_total_count += 1
         is_active = True
 
-    # 4. 提交所有更改
+    # 4. 提交事务
     session.add(post)
     if author:
         session.add(author)
 
     session.commit()
-    session.refresh(post)
+    session.refresh(post)  # 刷新以获取最新 count
 
     return is_active, post.like_count
 
 
-# --- 收藏帖子 ---
 def toggle_collection(session: Session, user_id: int, post_id: int) -> tuple[bool, int]:
     """
-    切换帖子收藏
-    Returns: (is_collected, new_count)
+    切换帖子收藏状态 (Toggle Collection)
+
+    Returns:
+        (is_collected: bool, new_collect_count: int)
     """
     post = session.get(CommunityPost, post_id)
     if not post:
         return False, 0
 
-    link = session.exec(
-        select(PostCollection).where(
-            PostCollection.user_id == user_id,
-            PostCollection.post_id == post_id
-        )
-    ).first()
+    statement = select(PostCollection).where(
+        PostCollection.user_id == user_id,
+        PostCollection.post_id == post_id
+    )
+    collect_record = session.exec(statement).first()
 
-    if link:
-        session.delete(link)
-        post.collect_count -= 1
+    if collect_record:
+        # --- 取消收藏 ---
+        session.delete(collect_record)
+        post.collect_count = max(0, post.collect_count - 1)
         is_active = False
     else:
-        new_link = PostCollection(user_id=user_id, post_id=post_id)
-        session.add(new_link)
+        # --- 收藏 ---
+        new_record = PostCollection(user_id=user_id, post_id=post_id)
+        session.add(new_record)
         post.collect_count += 1
         is_active = True
 
     session.add(post)
     session.commit()
     session.refresh(post)
+
     return is_active, post.collect_count
 
 
 # --- 评论 ---
-def create_comment(session: Session, user_id: int, post_id: int, content: str, parent_id: int | None) -> Comment:
+def create_comment(session: Session, user_id: int, post_id: int, content: str) -> Comment:
     """发布评论"""
     post = session.get(CommunityPost, post_id)
     if not post:
@@ -250,7 +282,7 @@ def create_comment(session: Session, user_id: int, post_id: int, content: str, p
         user_id=user_id,
         post_id=post_id,
         content=content,
-        parent_id=parent_id
+        # parent_id=parent_id
     )
     session.add(comment)
 
@@ -261,3 +293,196 @@ def create_comment(session: Session, user_id: int, post_id: int, content: str, p
     session.commit()
     session.refresh(comment)
     return comment
+
+
+def get_post_detail(session: Session, post_id: int, current_user_id: int) -> PostDetail:
+    """
+    获取帖子详情，包含：
+    1. 帖子内容与权限
+    2. 关联的模型信息
+    3. 交互状态 (是否关注/点赞/收藏)
+    4. 评论列表
+    5. 自动增加浏览量 (+1 view count)
+    """
+
+    # 1. 查询帖子 (包含关联对象)
+    post = session.get(CommunityPost, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+
+    # 2. 权限/可见性检查 (简单的逻辑，可根据需求扩展)
+    # 如果是私密贴，且看的人不是作者 -> 403
+    if post.visibility == Visibility.PRIVATE and post.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="该帖子为私密状态，无法查看")
+
+    # 如果是粉丝可见，且未关注 -> (这里可以加逻辑，暂时略过，保持简单)
+
+    # 3. 增加浏览量 (View Count +1)
+    post.view_count += 1
+    session.add(post)
+    session.commit()
+    session.refresh(post)  # 刷新以获取最新数据
+
+    # 4. 获取关联对象
+    asset = post.asset
+    author = post.author
+
+    # 5. 查询交互状态 (User -> Post/Author)
+    # A. 是否点赞
+    is_liked = session.exec(
+        select(InteractionLike).where(
+            InteractionLike.user_id == current_user_id,
+            InteractionLike.post_id == post_id
+        )
+    ).first() is not None
+
+    # B. 是否收藏
+    is_collected = session.exec(
+        select(PostCollection).where(
+            PostCollection.user_id == current_user_id,
+            PostCollection.post_id == post_id
+        )
+    ).first() is not None
+
+    # 是否关注作者
+    is_following = False
+    if author.id != current_user_id:
+        is_following = session.exec(
+            select(UserFollow).where(
+                UserFollow.follower_id == current_user_id,
+                UserFollow.followed_id == author.id
+            )
+        ).first() is not None
+
+    # 获取评论列表 (按时间倒序或正序)
+    comment_list = []
+    stmt_comments = (
+        select(Comment)
+        .where(Comment.post_id == post_id)
+        .order_by(Comment.created_at.desc())
+    )
+    db_comments = session.exec(stmt_comments).all()
+
+    for c in db_comments:
+        c_user = c.user  # 加载评论者
+        comment_list.append(CommentOut(
+            id=c.id,
+            user_id=c_user.id,
+            username=c_user.username,
+            avatar_url=c_user.avatar_url,
+            content=c.content,
+            created_at=str(c.created_at),
+            # parent_id=c.parent_id
+        ))
+
+    return PostDetail(
+        # Post Info
+        post_id=post.id,
+        content=post.content,
+        published_at=str(post.published_at),
+        visibility=post.visibility.value,  # Enum 转 string
+        allow_download=post.allow_download,
+
+        # Stats
+        like_count=post.like_count,
+        collect_count=post.collect_count,
+        view_count=post.view_count,
+        comment_count=post.comment_count,
+
+        # Author Info
+        owner_id=author.id,
+        owner_name=author.username,
+        owner_avatar=author.avatar_url,
+
+        # Interaction
+        is_liked=is_liked,
+        is_collected=is_collected,
+        is_following=is_following,
+
+        # Asset Info
+        asset=PostAssetInfo(
+            id=asset.id,
+            title=asset.title,
+            description=asset.description,
+            tags=asset.tags,
+            video_url=asset.video_path,
+            model_url=asset.model_path,
+            status=asset.status,
+            height=asset.height,
+            estimated_gen_seconds=asset.estimated_gen_seconds
+        ),
+
+        # Comments
+        comments=comment_list
+    )
+
+
+def get_my_collected_posts(session: Session, current_user_id: int) -> List[dict]:
+    """
+    获取【我收藏】的所有帖子列表
+    按收藏时间倒序排列
+    """
+    # 从 PostCollection 表找到对应的 CommunityPost
+    # 我们希望按收藏的时间(PostCollection.created_at)倒序，而不是帖子发布时间
+    statement = (
+        select(CommunityPost)
+        .join(PostCollection, CommunityPost.id == PostCollection.post_id)
+        .where(PostCollection.user_id == current_user_id)
+        .order_by(PostCollection.created_at.desc())
+    )
+
+    posts = session.exec(statement).all()
+
+    if not posts:
+        return []
+
+
+    # A. 我点赞过的帖子ID
+    liked_ids_stmt = select(InteractionLike.post_id).where(InteractionLike.user_id == current_user_id)
+    my_liked_ids = set(session.exec(liked_ids_stmt).all())
+
+    # B. 我评论过的帖子ID
+    commented_ids_stmt = select(Comment.post_id).where(Comment.user_id == current_user_id).distinct()
+    my_commented_ids = set(session.exec(commented_ids_stmt).all())
+
+    # C. 我关注的用户ID (用于判断是否关注了原作者)
+    following_ids_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == current_user_id)
+    my_following_ids = set(session.exec(following_ids_stmt).all())
+
+    # 组装数据
+    results = []
+    for post in posts:
+        asset = post.asset
+        author = post.author
+
+        # 优先显示帖子内容，没有则显示模型描述
+        display_desc = post.content if post.content else asset.description
+
+        results.append({
+            "post_id": post.id,
+            "asset_id": asset.id,
+            "title": asset.title,
+            "cover_url": asset.video_path,
+            "description": display_desc,
+            "tags": asset.tags,
+            "published_at": str(post.published_at),
+
+            # 统计数据
+            "view_count": post.view_count,
+            "like_count": post.like_count,
+            "collect_count": post.collect_count,
+            "comment_count": post.comment_count,
+
+            # 作者信息
+            "owner_id": author.id,
+            "owner_name": author.username,
+            "owner_avatar": author.avatar_url,
+
+            # 交互状态
+            "is_liked": post.id in my_liked_ids,
+            "is_collected": True,
+            "has_commented": post.id in my_commented_ids,
+            "is_following": author.id in my_following_ids
+        })
+
+    return results

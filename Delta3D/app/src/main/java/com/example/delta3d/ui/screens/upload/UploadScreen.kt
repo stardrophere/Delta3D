@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.*
@@ -33,7 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
 
-// --- 样式常量 (复用 AssetDetail 风格) ---
+// --- 样式常量
 private val AccentColor = Color(0xFF64FFDA) // 青色高亮
 private val GlassContainerColor = Color(0xFF1E1E1E).copy(alpha = 0.6f) // 半透明背景
 private val TextWhite = Color.White
@@ -52,28 +53,34 @@ fun UploadScreen(
     val uploadState by viewModel.uploadState.collectAsState()
     val suggestedTags by viewModel.suggestedTags.collectAsState()
 
+    // 订阅文件信息
+    val fileSize by viewModel.fileSizeStr.collectAsState()
+    val estimatedTime by viewModel.estimatedTimeStr.collectAsState()
+
     val context = LocalContext.current
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
-
-    // 标签系统
     var currentTagInput by remember { mutableStateOf("") }
     val tags = remember { mutableStateListOf<String>() }
 
+    // 获取标签和计算文件大小
     LaunchedEffect(token) {
         if (token != null && token!!.isNotBlank()) {
             viewModel.fetchUserTags(token!!)
         }
     }
+    // 计算文件大小和时间
+    LaunchedEffect(videoUri) {
+        viewModel.calculateFileInfo(context, videoUri)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 1. 全局动态背景
         AnimatedGradientBackground()
 
         Scaffold(
-            containerColor = Color.Transparent, // 透明以显示背景
+            containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
                     title = { Text("New Model", color = TextWhite, fontWeight = FontWeight.Bold) },
@@ -94,7 +101,7 @@ fun UploadScreen(
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // 2. 视频文件卡片 (玻璃拟态)
+                // 更新显示大小和时间
                 GlassCard {
                     Row(
                         modifier = Modifier.padding(20.dp),
@@ -121,16 +128,36 @@ fun UploadScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = TextWhite
                             )
-                            Text(
-                                "Ready to process",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextGray
-                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // 显示文件大小
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = fileSize,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextGray
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("•", color = TextGray)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // 显示预估时间
+                                Icon(
+                                    Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = AccentColor,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "~$estimatedTime",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AccentColor
+                                )
+                            }
                         }
                     }
                 }
 
-                // 3. 基础信息表单
+                //基础信息表单
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(
                         "BASIC INFO",
@@ -156,7 +183,32 @@ fun UploadScreen(
                     )
                 }
 
-                // 4. 标签系统 (彩色风格)
+//                // 技术规格表 (Technical Specifications)
+//                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+//                    Text(
+//                        "TECHNICAL SPECIFICATIONS",
+//                        style = MaterialTheme.typography.labelSmall,
+//                        color = AccentColor,
+//                        letterSpacing = 1.sp
+//                    )
+//
+//                    GlassCard {
+//                        Column(modifier = Modifier.padding(20.dp)) {
+//
+//                            SpecRow(label = "Status", value = "Pending Upload", valueColor = Color(0xFFFFC107))
+//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
+//                            SpecRow(label = "Vertices", value = "N/A")
+//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
+//                            SpecRow(label = "Faces", value = "N/A")
+//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
+//                            SpecRow(label = "Texture Resolution", value = "N/A")
+//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
+//                            SpecRow(label = "File Format", value = "N/A (Pending .obj)")
+//                        }
+//                    }
+//                }
+
+                // 标签系统
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         "TAGS",
@@ -165,13 +217,11 @@ fun UploadScreen(
                         letterSpacing = 1.sp
                     )
 
-                    // 4.1 已选标签展示 (带删除功能的彩色胶囊)
                     if (tags.isNotEmpty()) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // 修改：使用 forEachIndexed 传入索引
                             tags.forEachIndexed { index, tag ->
                                 DismissibleColorTag(
                                     text = tag,
@@ -182,7 +232,6 @@ fun UploadScreen(
                         }
                     }
 
-                    // 4.2 标签输入 + 添加按钮
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.weight(1f)) {
                             GlassyInput(
@@ -209,7 +258,6 @@ fun UploadScreen(
                         }
                     }
 
-                    // 4.3 推荐标签 (点击添加)
                     if (suggestedTags.isNotEmpty()) {
                         Text(
                             "Suggestions:",
@@ -223,7 +271,6 @@ fun UploadScreen(
                             suggestedTags
                                 .filter { it !in tags }
                                 .take(8)
-                                // 修改：使用 forEachIndexed 传入索引
                                 .forEachIndexed { index, tag ->
                                     SuggestionColorTag(
                                         text = tag,
@@ -235,7 +282,7 @@ fun UploadScreen(
                     }
                 }
 
-                // 5. 备注 (Optional)
+                //备注
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     GlassyInput(
                         value = remark,
@@ -248,7 +295,7 @@ fun UploadScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 6. 提交按钮 (高亮风格)
+                //提交
                 Button(
                     onClick = {
                         token?.let {
@@ -286,7 +333,6 @@ fun UploadScreen(
                     }
                 }
 
-                // 底部留白，防止被导航栏遮挡
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
@@ -294,12 +340,34 @@ fun UploadScreen(
 }
 
 // -----------------------------------------------------------
-// ✨ 自定义组件库 (美化核心)
+// 辅助组件
 // -----------------------------------------------------------
 
-/**
- * 玻璃拟态输入框 (基于 AuthScreens 改造，支持多行)
- */
+@Composable
+fun SpecRow(label: String, value: String, valueColor: Color = Color.White.copy(0.7f)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(0.5f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = valueColor,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// -----------------------------------------------------------
+// 自定义组件库
+// -----------------------------------------------------------
+
 @Composable
 fun GlassyInput(
     value: String,
@@ -318,9 +386,9 @@ fun GlassyInput(
         },
         singleLine = singleLine,
         minLines = minLines,
-        shape = RoundedCornerShape(20.dp), // 稍微圆一点，但不是完全胶囊，适合多行
+        shape = RoundedCornerShape(20.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = Color.Black.copy(alpha = 0.3f), // 聚焦时深色半透
+            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
             unfocusedContainerColor = Color.Black.copy(alpha = 0.2f),
             focusedBorderColor = AccentColor,
             unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
@@ -333,9 +401,6 @@ fun GlassyInput(
     )
 }
 
-/**
- * 玻璃卡片容器
- */
 @Composable
 fun GlassCard(content: @Composable () -> Unit) {
     Surface(
@@ -347,13 +412,9 @@ fun GlassCard(content: @Composable () -> Unit) {
     )
 }
 
-/**
- * 🎨 带删除功能的彩色标签 (已选状态)
- * 修改：增加 index 参数，用于顺序取色
- */
 @Composable
 fun DismissibleColorTag(text: String, index: Int, onDelete: () -> Unit) {
-    val color = getColorByIndex(index) // 根据索引取色
+    val color = getColorByIndex(index)
     Surface(
         color = color.copy(alpha = 0.15f),
         shape = RoundedCornerShape(50),
@@ -381,17 +442,13 @@ fun DismissibleColorTag(text: String, index: Int, onDelete: () -> Unit) {
     }
 }
 
-/**
- * 💡 推荐标签 (点击添加状态)
- * 修改：增加 index 参数，用于顺序取色
- */
 @Composable
 fun SuggestionColorTag(text: String, index: Int, onClick: () -> Unit) {
-    val color = getColorByIndex(index) // 根据索引取色
+    val color = getColorByIndex(index)
     Surface(
-        color = Color.Transparent, // 背景透明
+        color = Color.Transparent,
         shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)), // 仅边框有颜色
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)),
         modifier = Modifier
             .clickable { onClick() }
             .clip(RoundedCornerShape(50))
@@ -406,30 +463,13 @@ fun SuggestionColorTag(text: String, index: Int, onClick: () -> Unit) {
     }
 }
 
-/**
- * 🎲 简单的标签颜色生成器
- * 修改：根据索引 (index) 取色，确保排列时颜色循环且不重复
- */
 fun getColorByIndex(index: Int): Color {
     val colors = listOf(
-        Color(0xFF64FFDA), // 青
-        Color(0xFFFF4081), // 粉
-        Color(0xFFB388FF), // 紫
-        Color(0xFFFFD740), // 黄
-        Color(0xFF69F0AE), // 绿
-        Color(0xFF40C4FF), // 蓝
-
-        Color(0xFF7C4DFF), // 深紫（Royal Purple）
-        Color(0xFF00BFA5), // 深青（Teal）
-        Color(0xFFFF6D00), // 橙（Amber Orange）
-        Color(0xFF1DE9B6), // 薄荷青（Mint）
-        Color(0xFF536DFE), // 靛蓝（Indigo）
-        Color(0xFFFF5252), // 珊瑚红（Coral Red）
-        Color(0xFF26C6DA), // 青蓝（Cyan）
-        Color(0xFFAED581), // 鼠尾草绿（Sage）
-        Color(0xFFEF5350), // 柔红（Soft Red）
-        Color(0xFF90CAF9)  // 雾蓝（Mist Blue）
+        Color(0xFF64FFDA), Color(0xFFFF4081), Color(0xFFB388FF), Color(0xFFFFD740),
+        Color(0xFF69F0AE), Color(0xFF40C4FF), Color(0xFF7C4DFF), Color(0xFF00BFA5),
+        Color(0xFFFF6D00), Color(0xFF1DE9B6), Color(0xFF536DFE), Color(0xFFFF5252),
+        Color(0xFF26C6DA), Color(0xFFAED581), Color(0xFFEF5350), Color(0xFF90CAF9)
     )
-    val safeIndex = if (index < 0) 0 else index // 防止负数索引
+    val safeIndex = if (index < 0) 0 else index
     return colors[safeIndex % colors.size]
 }

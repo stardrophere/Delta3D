@@ -1,7 +1,9 @@
+import random
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 from sqlmodel import Field, Relationship, SQLModel, JSON
+from pathlib import Path
 
 
 # =============================================================================
@@ -23,7 +25,17 @@ class AssetStatus(str, Enum):
     FAILED = "failed"
 
 
+class Gender(str, Enum):
+    """性别：男、女、其他、保密"""
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+    SECRET = "secret"
+
+
 # =============================================================================
+
+
 # Association Tables (中间表)
 # =============================================================================
 
@@ -55,6 +67,10 @@ class InteractionLike(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+DEFAULT_AVATAR = "/static/uploads/avatars/default.png"
+DEFAULT_COVER = "/static/uploads/avatars/default_cover.png"
+
+
 # =============================================================================
 # Core Models (核心实体)
 # =============================================================================
@@ -65,7 +81,13 @@ class User(SQLModel, table=True):
 
     username: str = Field(index=True, unique=True, description="用户登录唯一标识")
     password_hash: str = Field(description="加密后的密码")
-    avatar_url: Optional[str] = Field(default=None, description="头像 URL")
+
+    gender: Gender = Field(
+        default=Gender.SECRET,
+        description="性别：male/female/other/secret"
+    )
+    avatar_url: Optional[str] = Field(default=DEFAULT_AVATAR, description="头像 URL")
+    cover_url: Optional[str] = Field(default=DEFAULT_COVER, description="个人主页背景URL")
     bio: Optional[str] = Field(default=None, max_length=500, description="个人简介")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -123,6 +145,13 @@ class ModelAsset(SQLModel, table=True):
 
     status: AssetStatus = Field(default=AssetStatus.PENDING)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    estimated_gen_seconds: Optional[int] = Field(
+        default=None, description="预估生成时间(秒)"
+    )
+    height: int = Field(
+        default_factory=lambda: random.randint(130, 220),
+        description="卡片高度（dp）"
+    )
 
     # 关系
     owner: User = Relationship(back_populates="assets")
@@ -130,6 +159,8 @@ class ModelAsset(SQLModel, table=True):
     collected_by_users: List[User] = Relationship(
         back_populates="collected_assets", link_model=ModelCollection
     )
+
+    download_records: List["DownloadRecord"] = Relationship(back_populates="asset")
 
 
 class CommunityPost(SQLModel, table=True):
@@ -154,7 +185,7 @@ class CommunityPost(SQLModel, table=True):
     author: User = Relationship(back_populates="posts")
     asset: ModelAsset = Relationship(back_populates="posts")
     comments: List["Comment"] = Relationship(back_populates="post")
-    download_records: List["DownloadRecord"] = Relationship(back_populates="post")
+
     collected_by_users: List[User] = Relationship(
         back_populates="collected_posts", link_model=PostCollection
     )
@@ -179,11 +210,15 @@ class DownloadRecord(SQLModel, table=True):
     """下载记录"""
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    post_id: int = Field(foreign_key="communitypost.id")
+
+    asset_id: int = Field(foreign_key="modelasset.id", description="下载的模型ID")
+
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     downloader: User = Relationship(back_populates="downloads")
-    post: CommunityPost = Relationship(back_populates="download_records")
+
+    asset: ModelAsset = Relationship(back_populates="download_records")
 
 
 class Message(SQLModel, table=True):
