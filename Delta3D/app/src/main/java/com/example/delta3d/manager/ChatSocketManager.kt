@@ -9,11 +9,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.*
 
-class ChatSocketManager {
+object ChatSocketManager {
     private var webSocket: WebSocket? = null
     private val gson = Gson()
 
-    //    private val _messageFlow = MutableSharedFlow<WSEvent>()
+    private var currentUserId: Int? = null
+
     private val _messageFlow = MutableSharedFlow<WSEvent>(
         replay = 1,
         extraBufferCapacity = 10
@@ -22,18 +23,34 @@ class ChatSocketManager {
 
 
     fun connect(token: String, myUserId: Int) {
-        if (webSocket != null) return
+        // 连接判断逻辑
+        if (webSocket != null) {
+            if (currentUserId == myUserId) {
+                Log.d("ChatSocket", "Socket already connected for user $myUserId, reusing.")
+                return
+            } else {
+                Log.d(
+                    "ChatSocket",
+                    "User changed ($currentUserId -> $myUserId), disconnecting old socket."
+                )
+                disconnect()
+            }
+        }
 
-        // 替换 ws:// 地址
+
+        currentUserId = myUserId
+
+        // ws:// 地址
         val wsUrl = RetrofitClient.BASE_URL
             .replace("http://", "ws://")
             .replace("https://", "wss://") + "api/v1/chat/ws/$myUserId"
+
 
         val request = Request.Builder().url(wsUrl).build()
 
         webSocket = RetrofitClient.client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d("ChatSocket", "Connected!")
+                Log.d("ChatSocket", "Connected for user: $myUserId")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -54,6 +71,7 @@ class ChatSocketManager {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("ChatSocket", "Error: ${t.message}")
                 this@ChatSocketManager.webSocket = null
+
             }
         })
     }
@@ -63,8 +81,14 @@ class ChatSocketManager {
         webSocket?.send(json)
     }
 
+    //断开连接
     fun disconnect() {
-        webSocket?.close(1000, "User Logout")
+        try {
+            webSocket?.close(1000, "User Logout")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         webSocket = null
+        currentUserId = null
     }
 }

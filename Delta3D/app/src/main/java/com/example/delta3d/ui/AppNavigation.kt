@@ -37,7 +37,7 @@ import com.example.delta3d.ui.screens.upload.UploadScreen
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-val chatSocketManager = ChatSocketManager()
+//val chatSocketManager = ChatSocketManager()
 
 @Composable
 fun AppNavigation(sessionVm: SessionViewModel) {
@@ -191,13 +191,13 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     targetUserId = targetId,
                     targetUserName = targetName,
                     sessionVm = sessionVm,
-                    socketManager = chatSocketManager, // 传入单例
+//                    socketManager = chatSocketManager,
                     onBack = { navController.popBackStack() },
                     onNavigateToPost = { postId ->
                         // 跳转到帖子详情
                         navController.navigate("post/$postId")
                     }
-                )
+                )//koyp89445
             }
 
             // 消息列表页

@@ -60,37 +60,65 @@ fun ChatScreen(
     targetUserId: Int,
     targetUserName: String = "Chat",
     sessionVm: SessionViewModel,
-    socketManager: ChatSocketManager,
+    // socketManager
     onBack: () -> Unit,
     onNavigateToPost: (Int) -> Unit
 ) {
     val user by sessionVm.currentUser.collectAsState()
     val token by sessionVm.token.collectAsState()
 
+    // 初始化 ViewModel
     val viewModel: ChatViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return ChatViewModel(socketManager, user?.id ?: 0, targetUserId, token ?: "") as T
+                return ChatViewModel(
+                    socketManager = ChatSocketManager, // 传入单例对象
+                    myUserId = user?.id ?: 0,
+                    targetUserId = targetUserId,
+                    token = token ?: ""
+                ) as T
             }
         }
     )
 
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
+    // 假设你在 ViewModel 中已经添加了 isLoadingHistory 状态
+    val isLoadingHistory by viewModel.isLoadingHistory.collectAsState()
 
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
     val targetAvatar by viewModel.targetAvatarUrl.collectAsState()
 
     val listState = rememberLazyListState()
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    // 监听滚动到顶部，触发加载更多历史记录
+    val isAtTop by remember {
+        derivedStateOf {
+            val firstIndex = listState.firstVisibleItemIndex
+            val firstOffset = listState.firstVisibleItemScrollOffset
+            firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
+        }
     }
 
+    LaunchedEffect(isAtTop) {
+        if (isAtTop) {
+            viewModel.loadMoreHistory()
+        }
+    }
+
+    // 智能滚动逻辑
+    LaunchedEffect(messages.lastOrNull()?.id) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // 进入页面时标记已读
     LaunchedEffect(Unit) {
         token?.let { rawToken ->
             try {
-                val authHeader = if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
+                val authHeader =
+                    if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
                 RetrofitClient.api.markAsRead(authHeader, targetUserId)
                 sessionVm.refreshUnreadCount()
             } catch (e: Exception) {
@@ -113,7 +141,6 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-
                         .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     GlassChatInputBar(
@@ -129,10 +156,37 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 100.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 20.dp,
+                    bottom = 100.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                items(messages) { msg ->
+                // 顶部加载指示器
+                if (isLoadingHistory) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AccentColor.copy(alpha = 0.7f),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                items(
+                    items = messages,
+                    // 顶部插入旧消息
+                    key = { it.id }
+                ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
                     MessageBubble(
                         msg = msg,
