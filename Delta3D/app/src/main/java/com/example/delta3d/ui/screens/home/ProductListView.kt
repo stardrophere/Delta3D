@@ -255,7 +255,7 @@ fun CollectButton(isCollected: Boolean, onClick: () -> Unit) {
             .clickable(
                 indication = ripple(color = Color.White),
                 interactionSource = remember { MutableInteractionSource() }
-            ) { onClick() }, // 🟢 响应点击
+            ) { onClick() }, //响应点击
         contentAlignment = Alignment.Center
     ) {
         Icon(

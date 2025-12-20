@@ -283,7 +283,7 @@ fun AssetDetailScreen(
                         onDismiss = { showDownloadDialog = false },
                         onDownload = { format ->
                             showDownloadDialog = false
-                            // 🟢 触发 ViewModel 的下载逻辑
+                            // 触发 ViewModel 的下载逻辑
                             token?.let {
                                 detailVm.downloadAsset(it, assetId, format)
                             }
@@ -296,10 +296,26 @@ fun AssetDetailScreen(
                 if (showShareDialog) {
                     ShareActionDialog(
                         title = "Share Asset",
-                        link = "${RetrofitClient.BASE_URL}share/${uiState.let { (it as? DetailUiState.Success)?.data?.id ?: 0 }}",
+                        link = "Wait for implementation...",
                         onDismiss = { showShareDialog = false },
                         onCopyLink = {
-                            // 复制链接逻辑.
+                            // 静态页面地址
+                            val staticPlaceholderUrl =
+                                "${RetrofitClient.BASE_URL}static/coming_soon.html"
+
+                            //复制到剪贴板
+                            val clipboard =
+                                context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText(
+                                "Copied Link",
+                                staticPlaceholderUrl
+                            )
+                            clipboard.setPrimaryClip(clip)
+
+                            scope.launch {
+                                feedbackState.showSuccess("Link copied! (Feature under construction)")
+                            }
+
                             showShareDialog = false
                         },
                         onPostToCommunity = {

@@ -166,7 +166,7 @@ fun StreamPreviewScreen(
             val url = (uiState as StreamUiState.Streaming).url
             Log.d("TRACK_STREAM", "ExoPlayer 首次准备播放: $url")
 
-            // 🟢 配置低延迟 MediaItem
+            // 低延迟 MediaItem
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
                 .setLiveConfiguration(

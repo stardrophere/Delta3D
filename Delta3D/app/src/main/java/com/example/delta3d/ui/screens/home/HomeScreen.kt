@@ -1,6 +1,6 @@
 package com.example.delta3d.ui.screens.home
 
-// 🟢 新增：导入 Activity Result API 相关包
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -229,7 +229,7 @@ fun HomeScreen(
                 ) {
                     EditableGlassySearchBar(
                         query = searchQuery,
-                        onQueryChange = { homeVm.onSearchInput(it) }, // 🟢 连接 VM 防抖
+                        onQueryChange = { homeVm.onSearchInput(it) }, //VM 防抖
                         placeholder = "Search models or tags...",
                         modifier = Modifier.weight(1f)
                     )
@@ -313,7 +313,14 @@ fun HomeScreen(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { showUploadGuide = true }
+                        onClick = {
+                            // 判断次数
+                            if (processingCount >= MAX_PROCESSING_LIMIT) {
+                                showLimitDialog = true
+                            } else {
+                                showUploadGuide = true
+                            }
+                        }
                     ),
                 fill = FabGradient,
                 icon = Icons.Rounded.Add,
@@ -536,7 +543,7 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.3f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        .clickable { onCollectClick() }, // 🟢 触发点击回调
+                        .clickable { onCollectClick() }, //触发点击回调
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

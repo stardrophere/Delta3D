@@ -30,7 +30,7 @@ class HomeViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
-    // 🟢 防抖任务句柄
+    // 防抖任务句柄
     private var searchJob: Job? = null
 
     /**
@@ -52,7 +52,7 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * 🟢 收藏切换
+     * 收藏切换
      */
     fun toggleCollect(assetId: Int, token: String) {
         viewModelScope.launch {

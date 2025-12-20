@@ -33,12 +33,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
+import androidx.compose.material.icons.filled.Warning
 
 // --- 样式常量
 private val AccentColor = Color(0xFF64FFDA) // 青色高亮
 private val GlassContainerColor = Color(0xFF1E1E1E).copy(alpha = 0.6f) // 半透明背景
 private val TextWhite = Color.White
 private val TextGray = Color.White.copy(alpha = 0.6f)
+private val ErrorColor = Color(0xFFFF5252)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -57,6 +59,9 @@ fun UploadScreen(
     val fileSize by viewModel.fileSizeStr.collectAsState()
     val estimatedTime by viewModel.estimatedTimeStr.collectAsState()
 
+    // 订阅资源错误信息
+    val resourceError by viewModel.resourceError.collectAsState()
+
     val context = LocalContext.current
 
     var title by remember { mutableStateOf("") }
@@ -65,7 +70,7 @@ fun UploadScreen(
     var currentTagInput by remember { mutableStateOf("") }
     val tags = remember { mutableStateListOf<String>() }
 
-    // 获取标签和计算文件大小
+    // 获取标签
     LaunchedEffect(token) {
         if (token != null && token!!.isNotBlank()) {
             viewModel.fetchUserTags(token!!)
@@ -101,7 +106,7 @@ fun UploadScreen(
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // 更新显示大小和时间
+                //频信息卡片
                 GlassCard {
                     Row(
                         modifier = Modifier.padding(20.dp),
@@ -134,7 +139,7 @@ fun UploadScreen(
                                 Text(
                                     text = fileSize,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = TextGray
+                                    color = if (resourceError != null && fileSize.contains("Limit")) ErrorColor else TextGray
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("•", color = TextGray)
@@ -143,16 +148,43 @@ fun UploadScreen(
                                 Icon(
                                     Icons.Default.Timer,
                                     contentDescription = null,
-                                    tint = AccentColor,
+                                    tint = if (resourceError != null && estimatedTime.contains("Limit")) ErrorColor else AccentColor,
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "~$estimatedTime",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = AccentColor
+                                    color = if (resourceError != null && estimatedTime.contains("Limit")) ErrorColor else AccentColor
                                 )
                             }
+                        }
+                    }
+                }
+
+                // 错误提示卡片
+                if (resourceError != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(ErrorColor.copy(0.1f), RoundedCornerShape(16.dp))
+                            .border(1.dp, ErrorColor.copy(0.3f), RoundedCornerShape(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = ErrorColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = resourceError ?: "",
+                                color = ErrorColor,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -182,31 +214,6 @@ fun UploadScreen(
                         minLines = 1
                     )
                 }
-
-//                // 技术规格表 (Technical Specifications)
-//                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-//                    Text(
-//                        "TECHNICAL SPECIFICATIONS",
-//                        style = MaterialTheme.typography.labelSmall,
-//                        color = AccentColor,
-//                        letterSpacing = 1.sp
-//                    )
-//
-//                    GlassCard {
-//                        Column(modifier = Modifier.padding(20.dp)) {
-//
-//                            SpecRow(label = "Status", value = "Pending Upload", valueColor = Color(0xFFFFC107))
-//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
-//                            SpecRow(label = "Vertices", value = "N/A")
-//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
-//                            SpecRow(label = "Faces", value = "N/A")
-//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
-//                            SpecRow(label = "Texture Resolution", value = "N/A")
-//                            HorizontalDivider(color = Color.White.copy(0.1f), modifier = Modifier.padding(vertical = 12.dp))
-//                            SpecRow(label = "File Format", value = "N/A (Pending .obj)")
-//                        }
-//                    }
-//                }
 
                 // 标签系统
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -311,7 +318,8 @@ fun UploadScreen(
                             )
                         }
                     },
-                    enabled = title.isNotEmpty() && uploadState !is UploadState.Loading,
+                    //如果 resourceError 不为空，禁用按钮
+                    enabled = title.isNotEmpty() && uploadState !is UploadState.Loading && resourceError == null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -319,8 +327,8 @@ fun UploadScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor,
                         contentColor = Color.Black,
-                        disabledContainerColor = Color.White.copy(0.1f),
-                        disabledContentColor = Color.White.copy(0.3f)
+                        disabledContainerColor = Color.White.copy(0.05f),
+                        disabledContentColor = Color.White.copy(0.2f)
                     ),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
                 ) {
@@ -329,7 +337,12 @@ fun UploadScreen(
                         Spacer(Modifier.width(12.dp))
                         Text("Uploading...", fontWeight = FontWeight.Bold)
                     } else {
-                        Text("UPLOAD MODEL", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        // 如果有错误，显示 Unable，否则显示 UPLOAD
+                        Text(
+                            if (resourceError != null) "UNABLE TO UPLOAD" else "UPLOAD MODEL",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
                     }
                 }
 

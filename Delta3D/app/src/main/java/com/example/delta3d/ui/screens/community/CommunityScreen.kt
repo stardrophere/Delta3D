@@ -277,15 +277,15 @@ fun GlassyIconBtn(
             modifier = Modifier.size(20.dp)
         )
 
-        // 🟢 红点逻辑
+        //红点逻辑
         if (unreadCount > 0) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd) // 对齐到右上角
-                    .padding(top = 8.dp, end = 8.dp) // 微调位置
-                    .size(8.dp) // 红点大小
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp)
+                    .size(8.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF5252)) // 红色
+                    .background(Color(0xFFFF5252))
                     .border(1.dp, Color(0x80000000), CircleShape) // 加个深色描边增加对比度
             )
         }

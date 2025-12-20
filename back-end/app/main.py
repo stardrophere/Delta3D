@@ -14,7 +14,6 @@ async def lifespan(app: FastAPI):
     print("服务器正在关闭...")
 
 # 2. 初始化 App
-# 把 lifespan 传进去
 app = FastAPI(title="Delta3D", lifespan=lifespan)
 app.include_router(api_router, prefix="/api/v1")
 

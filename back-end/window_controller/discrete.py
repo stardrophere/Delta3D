@@ -8,12 +8,11 @@ from typing import Optional, Tuple
 # --- 配置 ---
 TARGET_WINDOW_TITLE = "Instant Neural Graphics Primitives"
 
-# PyAutoGUI 的缓动函数提供更平滑、更自然的移动
-# 一些不错的选项：
+
 # pyautogui.linear - 恒定速度（机器人般）
 # pyautogui.easeInQuad - 开始慢，然后加速
 # pyautogui.easeOutQuad - 开始快，然后减速
-# pyautogui.easeInOutQuad - 开始慢，加速，然后慢结束（非常自然）
+# pyautogui.easeInOutQuad - 开始慢，加速，然后慢结束
 SMOOTHING_FUNCTION = pyautogui.easeInOutQuad
 
 
@@ -34,13 +33,10 @@ def find_target_window_info(title_part: str) -> Optional[Tuple[int, Tuple[int, i
 
     if results:
         hwnd, rect = results[0]
-        # 在交互前将窗口置于前端是个好习惯
         try:
             win32gui.SetForegroundWindow(hwnd)
-            # 添加微小延迟，让操作系统处理窗口切换
             time.sleep(0.1)
         except Exception as e:
-            # 如果脚本没有足够的权限，这可能会失败
             print(f"警告：无法设置前台窗口。{e}")
         return hwnd, rect
 
@@ -90,7 +86,7 @@ def simulate_pan_smooth(direction: str, pan_distance: int = 150, duration: float
 
     # 计算目标坐标
     target_x, target_y = center_x, center_y
-    # 在这里，我们已经有了 'up' (0, -pan_distance) 和 'down' (0, pan_distance)
+    # (0, -pan_distance) 和 'down' (0, pan_distance)
     direction_map = {
         'up': (0, -pan_distance),
         'down': (0, pan_distance),
@@ -207,7 +203,7 @@ if __name__ == '__main__':
     simulate_rotate_smooth("counter_clockwise", angle_distance=250, duration=0.5)
     time.sleep(1)
 
-    # 你的要求: 上下旋转 (垂直)
+
     print("\n--- 测试平滑旋转（向上看/俯仰）---")
     simulate_rotate_smooth("up_rotate", angle_distance=250, duration=0.5)
     time.sleep(1)
