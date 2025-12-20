@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # =========================================================
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 默认 7 天
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30
 
     # =========================================================
     # 4. 文件存储 (UPLOAD_DIR, DOMAIN)
