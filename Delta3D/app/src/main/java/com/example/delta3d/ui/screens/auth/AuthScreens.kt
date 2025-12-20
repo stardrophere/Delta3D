@@ -50,7 +50,7 @@ fun LoginScreen(
     // 状态管理
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) } // 加载状态
+    var isLoading by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -59,7 +59,7 @@ fun LoginScreen(
 
     // 全局背景容器
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedGradientBackground() // 你的极光背景
+        AnimatedGradientBackground()
 
         Column(
             modifier = Modifier
@@ -144,7 +144,7 @@ fun LoginScreen(
                         }
                     }
                 },
-                enabled = !isLoading, // 加载中禁止点击
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
