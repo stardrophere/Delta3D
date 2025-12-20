@@ -10,6 +10,7 @@ import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.api.UserDetail
 import com.example.delta3d.data.TokenStore
 import com.example.delta3d.manager.ChatSocketManager
+import com.example.delta3d.utils.AuthEvents
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,15 @@ class SessionViewModel(app: Application) :
             // 如果有 Token，自动拉取用户信息
             if (!savedToken.isNullOrBlank()) {
                 fetchCurrentUser(savedToken)
+            }
+        }
+
+        viewModelScope.launch {
+            AuthEvents.unauthorizedEvent.collect {
+                // 收到 401 信号，直接执行登出逻辑
+                if (_token.value != null) {
+                    logout()
+                }
             }
         }
     }

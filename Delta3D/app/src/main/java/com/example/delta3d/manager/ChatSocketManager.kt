@@ -5,6 +5,7 @@ import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.api.WSEvent
 import com.example.delta3d.api.WSMessageSend
 import com.google.gson.Gson
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.*
@@ -82,6 +83,7 @@ object ChatSocketManager {
     }
 
     //断开连接
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun disconnect() {
         try {
             webSocket?.close(1000, "User Logout")
@@ -90,5 +92,8 @@ object ChatSocketManager {
         }
         webSocket = null
         currentUserId = null
+
+        //缓存清空
+        _messageFlow.resetReplayCache()
     }
 }

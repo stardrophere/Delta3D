@@ -1,4 +1,5 @@
 package com.example.delta3d.api
+
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -13,6 +14,7 @@ object RetrofitClient {
 
     val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
+        .addInterceptor(AuthInterceptor())
         .build()
 
     val api: ApiService by lazy {

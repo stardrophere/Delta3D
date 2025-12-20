@@ -60,7 +60,6 @@ fun ChatScreen(
     targetUserId: Int,
     targetUserName: String = "Chat",
     sessionVm: SessionViewModel,
-    // socketManager
     onBack: () -> Unit,
     onNavigateToPost: (Int) -> Unit
 ) {
@@ -83,7 +82,6 @@ fun ChatScreen(
 
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
-    // 假设你在 ViewModel 中已经添加了 isLoadingHistory 状态
     val isLoadingHistory by viewModel.isLoadingHistory.collectAsState()
 
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
@@ -91,24 +89,36 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
 
-    var hasInitialScrolled by remember { mutableStateOf(false) } //初次滚动标记
+    // 标记是否已经完成了初始化的“瞬间到底”
+    var hasInitialScrolled by remember { mutableStateOf(false) }
 
 
-    //处理初始加载: 数据来了后，瞬间跳到底部，并锁定 history 加载
+    // 处理初始加载：历史记录加载出来后，瞬间跳到底部
     LaunchedEffect(messages.size) {
+        // 只有在消息列表非空，且从未执行过初始滚动时触发
         if (messages.isNotEmpty() && !hasInitialScrolled) {
             listState.scrollToItem(messages.size - 1)
             hasInitialScrolled = true
         }
     }
-    // 只有在初始滚动完成后，收到新消息才做平滑滚动
+
+    // 处理新消息：平滑滚动
+    // 只有在“初始滚动”已经完成后，收到新消息才做动画
     LaunchedEffect(messages.lastOrNull()?.id) {
         if (messages.isNotEmpty() && hasInitialScrolled) {
-            listState.animateScrollToItem(messages.size - 1)
+            // 智能滚动判断：
+            val isAtBottom = !listState.canScrollForward
+            val lastMsg = messages.last()
+            val isMe = lastMsg.isMe(user?.id ?: 0)
+
+            if (isMe || isAtBottom) {
+                listState.animateScrollToItem(messages.size - 1)
+            }
         }
     }
 
-    // 处理历史加载只有当“初始滚动”完成后，才允许触发
+
+    // 只有当“初始滚动”完成后，才允许触发加载更多，防止刚进页面就触发加载
     val isAtTop by remember {
         derivedStateOf {
             val firstIndex = listState.firstVisibleItemIndex
@@ -120,13 +130,6 @@ fun ChatScreen(
     LaunchedEffect(isAtTop) {
         if (isAtTop) {
             viewModel.loadMoreHistory()
-        }
-    }
-
-    // 智能滚动逻辑
-    LaunchedEffect(messages.lastOrNull()?.id) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
@@ -201,7 +204,6 @@ fun ChatScreen(
 
                 items(
                     items = messages,
-                    // 顶部插入旧消息
                     key = { it.id }
                 ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
