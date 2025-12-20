@@ -1,6 +1,6 @@
 package com.example.delta3d.ui.screens.home
 
-// 🟢 新增：导入 Activity Result API 相关包
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,11 +66,19 @@ import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Cached
+import androidx.compose.material.icons.rounded.SdStorage
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.Warning
 
 // --- 样式常量 ---
 private val CardShape = RoundedCornerShape(16.dp)
@@ -90,10 +98,18 @@ private val GlassBackground = Brush.linearGradient(
 // FAB 专属渐变
 private val FabGradient = Brush.linearGradient(
     colors = listOf(
-        Color(0xFF64FFDA), // 亮青色
-        Color(0xFF00B8D4)  // 深青色
+        Color(0xFF7C4DFF),
+        Color(0xFF00E5FF)
     )
 )
+
+//限制数目
+private const val MAX_PROCESSING_LIMIT = 1
+
+private val AccentColor = Color(0xFF64FFDA)
+private val TextWhite = Color.White
+private val TextGray = Color.White.copy(alpha = 0.6f)
+private val GlassContainerColor = Color(0xFF1E1E1E).copy(alpha = 0.95f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,6 +133,10 @@ fun HomeScreen(
     val BubbleGradient = Brush.linearGradient(
         colors = listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF))
     )
+    var showUploadGuide by remember { mutableStateOf(false) }
+
+
+    var showLimitDialog by remember { mutableStateOf(false) }
 
     // 定义媒体选择器 Launcher
     val mediaPickerLauncher = rememberLauncherForActivityResult(
@@ -209,7 +229,7 @@ fun HomeScreen(
                 ) {
                     EditableGlassySearchBar(
                         query = searchQuery,
-                        onQueryChange = { homeVm.onSearchInput(it) }, // 🟢 连接 VM 防抖
+                        onQueryChange = { homeVm.onSearchInput(it) }, //VM 防抖
                         placeholder = "Search models or tags...",
                         modifier = Modifier.weight(1f)
                     )
@@ -294,19 +314,41 @@ fun HomeScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
-                            // 启动系统媒体选择器
-                            mediaPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                            )
+                            // 判断次数
+                            if (processingCount >= MAX_PROCESSING_LIMIT) {
+                                showLimitDialog = true
+                            } else {
+                                showUploadGuide = true
+                            }
                         }
                     ),
-                fill = BubbleGradient,
+                fill = FabGradient,
                 icon = Icons.Rounded.Add,
                 iconSize = 44.dp
             )
         }
 
-    }// Box 结束
+        // 弹窗组件
+        if (showUploadGuide) {
+            GlassyUploadGuideDialog(
+                onDismiss = { showUploadGuide = false },
+                onConfirm = {
+                    showUploadGuide = false
+                    mediaPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    )
+                }
+            )
+        }
+
+        //限制弹窗
+        if (showLimitDialog) {
+            GlassyLimitDialog(
+                onDismiss = { showLimitDialog = false }
+            )
+        }
+
+    }
 }
 
 // --- 组件定义 ---
@@ -501,7 +543,7 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.3f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        .clickable { onCollectClick() }, // 🟢 触发点击回调
+                        .clickable { onCollectClick() }, //触发点击回调
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -662,5 +704,248 @@ private fun GlassBubble(
             tint = iconTint,
             modifier = Modifier.size(iconSize)
         )
+    }
+}
+
+//指引弹窗
+@Composable
+fun GlassyUploadGuideDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                // 边框渐变，增加质感
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color.White.copy(0.15f), Color.White.copy(0.05f))
+                    ),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .background(GlassContainerColor)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recording Tips",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.Close, "Close", tint = TextGray)
+                    }
+                }
+
+                // 分割线
+                HorizontalDivider(color = Color.White.copy(0.1f))
+
+
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    GuideTipItem(
+                        icon = Icons.Rounded.Cached,
+                        title = "Orbit the Object",
+                        desc = "Move slowly 360° around the subject."
+                    )
+                    GuideTipItem(
+                        icon = Icons.Rounded.Timer,
+                        title = "Keep it Short",
+                        desc = "Duration must be under 30 seconds."
+                    )
+                    GuideTipItem(
+                        icon = Icons.Rounded.SdStorage,
+                        title = "File Size Limit",
+                        desc = "File size must be under 20MB."
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // ---底部按钮
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Cancel 按钮
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(0.05f), // 淡淡的灰色
+                            contentColor = TextWhite.copy(0.8f)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                    ) {
+                        Text("Cancel", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    // Confirm 按钮 (高亮)
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = Color.Black
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                    ) {
+                        Text("OK", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GuideTipItem(
+    icon: ImageVector,
+    title: String,
+    desc: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(0.03f), RoundedCornerShape(12.dp))
+            .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp))
+            .padding(12.dp)
+    ) {
+        // 图标容器
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(AccentColor.copy(0.1f), CircleShape)
+                .border(1.dp, AccentColor.copy(0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // 文字
+        Column {
+            Text(
+                text = title,
+                color = TextWhite,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+            Text(
+                text = desc,
+                color = TextGray,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+
+
+@Composable
+fun GlassyLimitDialog(
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFF5252).copy(0.3f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .background(GlassContainerColor)
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 图标
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .background(Color(0xFFFF5252).copy(0.1f), CircleShape)
+                        .border(1.dp, Color(0xFFFF5252).copy(0.3f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFF5252),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Text(
+                    text = "Server Busy",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Due to limited server resources, please wait for your current task to finish before uploading a new one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextGray,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(0.1f),
+                        contentColor = TextWhite
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(0.dp)
+                ) {
+                    Text("Understood", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

@@ -1,8 +1,9 @@
 package com.example.delta3d.ui.screens.upload
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.provider.OpenableColumns // 🟢 新增
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta3d.api.RetrofitClient
@@ -11,13 +12,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
-import java.text.DecimalFormat // 🟢 新增
-
+import java.text.DecimalFormat
 
 class UploadViewModel : ViewModel() {
 
@@ -28,19 +27,28 @@ class UploadViewModel : ViewModel() {
     private val _suggestedTags = MutableStateFlow<List<String>>(defaultTags)
     val suggestedTags = _suggestedTags.asStateFlow()
 
-    //文件大小和预估时间
+    // 文件大小和预估时间
     private val _fileSizeStr = MutableStateFlow("Calculated...")
     val fileSizeStr = _fileSizeStr.asStateFlow()
 
     private val _estimatedTimeStr = MutableStateFlow("Calculating...")
     val estimatedTimeStr = _estimatedTimeStr.asStateFlow()
 
+    // 资源限制错误信息
+    private val _resourceError = MutableStateFlow<String?>(null)
+    val resourceError = _resourceError.asStateFlow()
+
     private var calculatedSecondsInt: Int? = null
 
     // 计算文件大小和预估时间的逻辑
     fun calculateFileInfo(context: Context, uri: Uri) {
         viewModelScope.launch {
+            _resourceError.value = null // 重置错误状态
+            _fileSizeStr.value = "Calculating..."
+            _estimatedTimeStr.value = "Calculating..."
+
             try {
+                // 获取并计算文件大小
                 var sizeBytes: Long = 0
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                     val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
@@ -52,9 +60,42 @@ class UploadViewModel : ViewModel() {
                 // 格式化文件大小
                 val sizeMb = sizeBytes / (1024.0 * 1024.0)
                 val df = DecimalFormat("#.##")
+
+                // 文件大小超过 50MB
+                if (sizeMb > 50) {
+                    _fileSizeStr.value = "${df.format(sizeMb)} MB (Limit: 50MB)"
+                    _estimatedTimeStr.value = "N/A"
+                    _resourceError.value =
+                        "File too large (>50MB). Restricted due to server limits."
+                    return@launch // 中断后续计算
+                }
+
                 _fileSizeStr.value = "${df.format(sizeMb)} MB"
 
-                // 估算公式
+                // 校验 2：获取视频真实时长
+                var durationSec = 0L
+                try {
+                    val retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(context, uri)
+                    val timeString =
+                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    val durationMs = timeString?.toLong() ?: 0L
+                    durationSec = durationMs / 1000
+                    retriever.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                // 时长超过 1分钟 (60秒)
+                if (durationSec > 60) {
+                    _estimatedTimeStr.value = "${durationSec}s (Limit: 60s)"
+                    _resourceError.value =
+                        "Video too long (>1 min). Restricted due to server limits."
+                    return@launch // 中断后续计算
+                }
+
+                // 如果校验通过，继续计算预估处理时间
+                // 估算公式：基础30秒 + 每4MB增加15秒
                 val baseTime = 30
                 val variableTime = (sizeMb / 4.0) * 15.0
                 val totalSeconds = (baseTime + variableTime).toInt()
@@ -71,9 +112,11 @@ class UploadViewModel : ViewModel() {
                 }
 
             } catch (e: Exception) {
+                e.printStackTrace()
                 _fileSizeStr.value = "Unknown"
                 _estimatedTimeStr.value = "Unknown"
                 calculatedSecondsInt = null
+                _resourceError.value = "Failed to analyze file."
             }
         }
     }
@@ -105,6 +148,9 @@ class UploadViewModel : ViewModel() {
         tags: List<String>,
         onSuccess: () -> Unit
     ) {
+        // 如果有错误，禁止上传
+        if (_resourceError.value != null) return
+
         viewModelScope.launch {
             _uploadState.value = UploadState.Loading
             try {

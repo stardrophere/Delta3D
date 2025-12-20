@@ -275,3 +275,17 @@ class DownloadResponse(SQLModel):
     """下载接口响应，返回真实文件链接"""
     url: str
     filename: str
+
+
+class AssetUpdate(SQLModel):
+    """资产更新请求模型"""
+    title: str | None = None
+    description: str | None = None
+    remark: str | None = None
+    tags: List[str] | None = None
+
+
+class AssetReport(SQLModel):
+    """举报/反馈请求模型"""
+    category: str  # 例如: "Bug", "Inappropriate", "Other"
+    content: str

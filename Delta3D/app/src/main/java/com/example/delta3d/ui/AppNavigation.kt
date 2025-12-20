@@ -37,7 +37,7 @@ import com.example.delta3d.ui.screens.upload.UploadScreen
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-val chatSocketManager = ChatSocketManager()
+//val chatSocketManager = ChatSocketManager()
 
 @Composable
 fun AppNavigation(sessionVm: SessionViewModel) {
@@ -191,13 +191,13 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     targetUserId = targetId,
                     targetUserName = targetName,
                     sessionVm = sessionVm,
-                    socketManager = chatSocketManager, // 传入单例
+//                    socketManager = chatSocketManager,
                     onBack = { navController.popBackStack() },
                     onNavigateToPost = { postId ->
                         // 跳转到帖子详情
                         navController.navigate("post/$postId")
                     }
-                )
+                )//koyp89445
             }
 
             // 消息列表页
@@ -312,7 +312,16 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     userId = userId,
                     listType = type,
                     onBack = { navController.popBackStack() },
-                    onUserClick = { targetId ->
+                    // 接收 id 和 username 并跳转
+                    onUserClick = { targetId, targetName ->
+                        val currentUserId = sessionVm.currentUser.value?.id
+
+                        if (targetId != currentUserId) {
+                            // 跳转到聊天页面
+                            navController.navigate("chat/$targetId/$targetName")
+                        } else {
+                            // Log.d("Nav", "Cannot chat with yourself")
+                        }
                     }
                 )
             }

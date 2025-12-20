@@ -9,12 +9,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.api.UserDetail
 import com.example.delta3d.data.TokenStore
+import com.example.delta3d.manager.ChatSocketManager
+import com.example.delta3d.utils.AuthEvents
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class SessionViewModel(app: Application) : AndroidViewModel(app) {
+class SessionViewModel(app: Application) :
+    AndroidViewModel(app) {
 
     private val tokenStore = TokenStore(app.applicationContext)
 
@@ -44,6 +47,15 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
                 fetchCurrentUser(savedToken)
             }
         }
+
+        viewModelScope.launch {
+            AuthEvents.unauthorizedEvent.collect {
+                // 收到 401 信号，直接执行登出逻辑
+                if (_token.value != null) {
+                    logout()
+                }
+            }
+        }
     }
 
     fun login(token: String) {
@@ -60,6 +72,7 @@ class SessionViewModel(app: Application) : AndroidViewModel(app) {
         _token.value = null
         _currentUser.value = null // 登出时清空信息
         _totalUnreadCount.value = 0 // 出时清空未读数
+        ChatSocketManager.disconnect() //中断连接
         viewModelScope.launch { tokenStore.clear() }
     }
 

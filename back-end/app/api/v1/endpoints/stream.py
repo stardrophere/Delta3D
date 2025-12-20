@@ -31,24 +31,23 @@ def start_stream(
     if asset.status != "completed" or not asset.model_path:
         raise HTTPException(status_code=400, detail="模型尚未训练完成，无法预览")
 
-    # 0) DB 里一定是 static 开头（例如：static\uploads\...\model.msgpack）
-    model_path_rel = Path(asset.model_path)  # 这里是“相对路径”，不是磁盘绝对路径
 
-    # 1) 强制要求以 static 开头（你说数据库保证，那就严格一点，出错更早暴露）
+    model_path_rel = Path(asset.model_path)  # 相对路径
+
     parts = model_path_rel.parts
     if not parts or parts[0].lower() != "static":
         raise HTTPException(status_code=500, detail=f"model_path 不合法(必须 static 开头): {asset.model_path}")
 
-    # 2) 去掉最前面的 static，得到相对 static 目录内部的路径：uploads/.../model.msgpack
+
     under_static = Path(*parts[1:])
 
-    # 3) static_root 是磁盘上的 back-end/static
+
     static_root = Path("static").resolve()
 
-    # 4) 拼成真正的磁盘路径
+
     snapshot_path = static_root / under_static
 
-    # 5) asset_dir / scene_path 推算
+
     asset_dir = snapshot_path.parent
     scene_path = asset_dir / f"{asset_dir.name}_scene"
 
@@ -89,7 +88,7 @@ def start_stream(
     )
 
     host = request.url.hostname  # 推荐
-    # 或者：host = request.headers.get("host", "").split(":")[0]
+    # host = request.headers.get("host", "").split(":")[0]
 
     rtsp_url = f"rtsp://{host}:8555/live"
 

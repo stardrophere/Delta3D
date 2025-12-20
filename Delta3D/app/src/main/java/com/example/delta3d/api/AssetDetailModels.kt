@@ -30,3 +30,17 @@ data class DownloadResponse(
     val url: String,
     val filename: String
 )
+
+//更新的
+data class AssetUpdateRequest(
+    val title: String?,
+    val description: String?,
+    val remark: String?,
+    val tags: List<String>?
+)
+
+//报告问题的
+data class ReportRequest(
+    val category: String,
+    val content: String
+)

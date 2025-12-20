@@ -60,37 +60,85 @@ fun ChatScreen(
     targetUserId: Int,
     targetUserName: String = "Chat",
     sessionVm: SessionViewModel,
-    socketManager: ChatSocketManager,
     onBack: () -> Unit,
     onNavigateToPost: (Int) -> Unit
 ) {
     val user by sessionVm.currentUser.collectAsState()
     val token by sessionVm.token.collectAsState()
 
+    // 初始化 ViewModel
     val viewModel: ChatViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return ChatViewModel(socketManager, user?.id ?: 0, targetUserId, token ?: "") as T
+                return ChatViewModel(
+                    socketManager = ChatSocketManager, // 传入单例对象
+                    myUserId = user?.id ?: 0,
+                    targetUserId = targetUserId,
+                    token = token ?: ""
+                ) as T
             }
         }
     )
 
     val messages by viewModel.messages.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
+    val isLoadingHistory by viewModel.isLoadingHistory.collectAsState()
 
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
     val targetAvatar by viewModel.targetAvatarUrl.collectAsState()
 
     val listState = rememberLazyListState()
 
+    // 标记是否已经完成了初始化的“瞬间到底”
+    var hasInitialScrolled by remember { mutableStateOf(false) }
+
+
+    // 处理初始加载：历史记录加载出来后，瞬间跳到底部
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+        // 只有在消息列表非空，且从未执行过初始滚动时触发
+        if (messages.isNotEmpty() && !hasInitialScrolled) {
+            listState.scrollToItem(messages.size - 1)
+            hasInitialScrolled = true
+        }
     }
 
+    // 处理新消息：平滑滚动
+    // 只有在“初始滚动”已经完成后，收到新消息才做动画
+    LaunchedEffect(messages.lastOrNull()?.id) {
+        if (messages.isNotEmpty() && hasInitialScrolled) {
+            // 智能滚动判断：
+            val isAtBottom = !listState.canScrollForward
+            val lastMsg = messages.last()
+            val isMe = lastMsg.isMe(user?.id ?: 0)
+
+            if (isMe || isAtBottom) {
+                listState.animateScrollToItem(messages.size - 1)
+            }
+        }
+    }
+
+
+    // 只有当“初始滚动”完成后，才允许触发加载更多，防止刚进页面就触发加载
+    val isAtTop by remember {
+        derivedStateOf {
+            val firstIndex = listState.firstVisibleItemIndex
+            val firstOffset = listState.firstVisibleItemScrollOffset
+            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
+        }
+    }
+
+    LaunchedEffect(isAtTop) {
+        if (isAtTop) {
+            viewModel.loadMoreHistory()
+        }
+    }
+
+    // 进入页面时标记已读
     LaunchedEffect(Unit) {
         token?.let { rawToken ->
             try {
-                val authHeader = if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
+                val authHeader =
+                    if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
                 RetrofitClient.api.markAsRead(authHeader, targetUserId)
                 sessionVm.refreshUnreadCount()
             } catch (e: Exception) {
@@ -113,7 +161,6 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-
                         .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     GlassChatInputBar(
@@ -129,10 +176,36 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 100.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 20.dp,
+                    bottom = 100.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                items(messages) { msg ->
+                // 顶部加载指示器
+                if (isLoadingHistory) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AccentColor.copy(alpha = 0.7f),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                items(
+                    items = messages,
+                    key = { it.id }
+                ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
                     MessageBubble(
                         msg = msg,

@@ -8,7 +8,7 @@ from . import models
 # =================================================================
 connect_args = {"check_same_thread": False}
 
-# 2. 创建数据库引擎
+# 创建数据库引擎
 engine = create_engine(
     settings.DATABASE_URL,
     echo=False,

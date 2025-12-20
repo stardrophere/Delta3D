@@ -2,7 +2,7 @@ import sys
 import time
 from pathlib import Path
 
-from app.process_manager.utils import ExternalCommandRunner  # 如果你类名不同，这里改成你的实际类名
+from app.process_manager.utils import ExternalCommandRunner
 
 
 def run_ngp_gui_with_rtsp_stream(

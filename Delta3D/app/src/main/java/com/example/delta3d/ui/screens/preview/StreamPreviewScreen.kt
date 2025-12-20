@@ -69,7 +69,7 @@ fun StreamPreviewScreen(
 
     // 初始化推流
     LaunchedEffect(assetId) {
-        Log.d("TRACK_ID", "3. [PreviewScreen] 页面初始化, 接收到的 ID: $assetId")
+        Log.d("TRACK_ID", "[PreviewScreen] 页面初始化, 接收到的 ID: $assetId")
         retryCount = 0
         token?.let { streamVm.startStreamSession(it, assetId) }
     }
@@ -109,7 +109,7 @@ fun StreamPreviewScreen(
                             retryCount++
                             Log.d(
                                 "TRACK_STREAM",
-                                "🔄 检测到播放失败，准备执行第 $retryCount 次重试..."
+                                "检测到播放失败，准备执行第 $retryCount 次重试..."
                             )
                         } else {
                             Log.e("TRACK_STREAM", "超过最大重试次数，放弃播放")
@@ -129,12 +129,12 @@ fun StreamPreviewScreen(
     // 处理重试逻辑
     LaunchedEffect(retryCount) {
         if (retryCount > 0) {
-            Log.d("TRACK_STREAM", "⏳ 等待 1.5秒后重试...")
+            Log.d("TRACK_STREAM", "等待 1.5秒后重试...")
             delay(2000)
 
             if (uiState is StreamUiState.Streaming) {
                 val url = (uiState as StreamUiState.Streaming).url
-                Log.d("TRACK_STREAM", "🔄 执行重试: $url")
+                Log.d("TRACK_STREAM", "执行重试: $url")
 
                 //低延迟 MediaItem
                 val mediaItem = MediaItem.Builder()
@@ -166,7 +166,7 @@ fun StreamPreviewScreen(
             val url = (uiState as StreamUiState.Streaming).url
             Log.d("TRACK_STREAM", "ExoPlayer 首次准备播放: $url")
 
-            // 🟢 配置低延迟 MediaItem
+            // 低延迟 MediaItem
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
                 .setLiveConfiguration(
@@ -211,7 +211,7 @@ fun StreamPreviewScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 主要内容层 (视频 或 Loading/Error)
+        // 主要内容层
         when (uiState) {
             is StreamUiState.Loading -> {
                 CircularProgressIndicator(
@@ -329,13 +329,14 @@ fun StreamPreviewScreen(
     }
 }
 
-// --- 以下组件代码保持原样 ---
+// --- 控制面板组件 ---
 
 @Composable
 fun StreamControlOverlay(
     modifier: Modifier = Modifier,
     onControlEvent: (StreamActionType, StreamDirection, String) -> Unit
 ) {
+    // 默认是旋转模式
     var isPanMode by remember { mutableStateOf(false) }
 
     Row(
@@ -344,28 +345,30 @@ fun StreamControlOverlay(
         verticalAlignment = Alignment.Bottom
     ) {
 
-        // 模式切换
+        // 模式切换区域
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
+            // 视觉反馈
             GlassButton(
                 onClick = { isPanMode = !isPanMode },
-                active = true
+                active = isPanMode
             ) {
                 Icon(
                     if (isPanMode) Icons.Default.OpenWith else Icons.Default.Refresh,
                     null,
-                    tint = AccentColor
+                    tint = if (isPanMode) Color.Black else AccentColor
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     if (isPanMode) "PAN" else "ROTATE",
-                    color = AccentColor,
+                    color = if (isPanMode) Color.Black else AccentColor,
                     style = MaterialTheme.typography.labelSmall
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // 缩放控制 (Zoom) - 通常不需要反转
             GlassContainer {
                 Column {
                     RepeatButton(
@@ -411,7 +414,7 @@ fun StreamControlOverlay(
             }
         }
 
-        // 方向键
+        // 方向键区域
         GlassContainer(shape = CircleShape, padding = 10.dp) {
             Box(
                 modifier = Modifier.size(160.dp),
@@ -419,24 +422,31 @@ fun StreamControlOverlay(
             ) {
                 val currentAction = if (isPanMode) StreamActionType.PAN else StreamActionType.ROTATE
 
+                // 反转所有方向
+
+
                 Box(modifier = Modifier.align(Alignment.TopCenter)) {
                     DPadButton(Icons.Default.KeyboardArrowUp) { mode ->
-                        onControlEvent(currentAction, StreamDirection.UP, mode)
+                        // 界面按 上 -> 发送 DOWN
+                        onControlEvent(currentAction, StreamDirection.DOWN, mode)
                     }
                 }
                 Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                     DPadButton(Icons.Default.KeyboardArrowDown) { mode ->
-                        onControlEvent(currentAction, StreamDirection.DOWN, mode)
+                        // 界面按 下 -> 发送 UP
+                        onControlEvent(currentAction, StreamDirection.UP, mode)
                     }
                 }
                 Box(modifier = Modifier.align(Alignment.CenterStart)) {
                     DPadButton(Icons.Default.KeyboardArrowLeft) { mode ->
-                        onControlEvent(currentAction, StreamDirection.LEFT, mode)
+                        // 界面按 左 -> 发送 RIGHT
+                        onControlEvent(currentAction, StreamDirection.RIGHT, mode)
                     }
                 }
                 Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                     DPadButton(Icons.Default.KeyboardArrowRight) { mode ->
-                        onControlEvent(currentAction, StreamDirection.RIGHT, mode)
+                        // 界面按 右 -> 发送 LEFT
+                        onControlEvent(currentAction, StreamDirection.LEFT, mode)
                     }
                 }
 
@@ -474,12 +484,16 @@ fun GlassButton(
     active: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
+    // 根据 active 状态改变背景色和文字颜色逻辑
+    val bgColor = if (active) AccentColor else Color.Transparent // 激活变绿
+    val border = if (active) null else BorderStroke(1.dp, GlassBorder)
+
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (active) GlassControlColor else Color.Transparent
+            containerColor = bgColor
         ),
-        border = if (active) BorderStroke(1.dp, GlassBorder) else null,
+        border = border,
         shape = RoundedCornerShape(24.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
@@ -496,6 +510,11 @@ fun RepeatButton(
 ) {
     var isPressed by remember { mutableStateOf(false) }
 
+    // 使用 rememberUpdatedState 包装回调，确保在 pointerInput 中总是获取到最新的 lambda
+    val currentOnPressStart by rememberUpdatedState(onPressStart)
+    val currentOnPressEnd by rememberUpdatedState(onPressEnd)
+
+
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -504,10 +523,12 @@ fun RepeatButton(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        onPressStart()
+                        // 调用包装后的最新状态
+                        currentOnPressStart()
                         tryAwaitRelease()
                         isPressed = false
-                        onPressEnd()
+                        // 调用包装后的最新状态
+                        currentOnPressEnd()
                     }
                 )
             }

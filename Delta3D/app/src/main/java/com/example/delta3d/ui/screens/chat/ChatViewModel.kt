@@ -31,23 +31,27 @@ class ChatViewModel(
     private val _targetAvatarUrl = MutableStateFlow<String?>(null)
     val targetAvatarUrl = _targetAvatarUrl.asStateFlow()
 
-    init {
-        loadHistory()
-        loadAvatars() // 加载头像
+    private var currentOffset = 0
+    private val pageSize = 20 // 每次加载20条，避免卡顿
 
+    private val _isLoadingHistory = MutableStateFlow(false) // 是否正在加载历史
+    val isLoadingHistory = _isLoadingHistory.asStateFlow()
+
+    private var isEndReached = false // 是否已经没有更多历史消息了
+
+    init {
+        loadMoreHistory() // 初始加载
+        loadAvatars()
         markMessagesAsRead()
 
+        // Socket 监听逻辑
         viewModelScope.launch {
             socketManager.messageFlow.collect { event ->
                 if (event.type == "new_message") {
                     val msg = event.data
                     if (msg.senderId == targetUserId || msg.receiverId == targetUserId) {
-                        addMessage(msg)
-
-                        // 如果是对方发来的新消息，且我正在当前页面，立即标记已读
-                        if (msg.senderId == targetUserId) {
-                            markMessagesAsRead()
-                        }
+                        addNewMessage(msg)
+                        if (msg.senderId == targetUserId) markMessagesAsRead()
                     }
                 }
             }
@@ -55,7 +59,7 @@ class ChatViewModel(
         socketManager.connect(token, myUserId)
     }
 
-    // 🟢 新增：并行获取头像
+    //并行获取头像
     private fun loadAvatars() {
         val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
 
@@ -125,6 +129,52 @@ class ChatViewModel(
                 e.printStackTrace()
             }
         }
+    }
+
+    //分页加载
+    fun loadMoreHistory() {
+        if (_isLoadingHistory.value || isEndReached) return
+
+        _isLoadingHistory.value = true
+        viewModelScope.launch {
+            try {
+                val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+                // 调用 API，传入 offset 和 limit
+                val newMessagesDesc = RetrofitClient.api.getChatHistory(
+                    token = authHeader,
+                    targetUserId = targetUserId,
+                    limit = pageSize,
+                    offset = currentOffset
+                )
+
+                if (newMessagesDesc.isEmpty()) {
+                    isEndReached = true
+                } else {
+                    val newMessagesAsc = newMessagesDesc.reversed()
+
+                    // 更新 Offset
+                    currentOffset += newMessagesDesc.size
+
+
+                    val currentList = _messages.value
+                    _messages.value = newMessagesAsc + currentList
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoadingHistory.value = false
+            }
+        }
+    }
+
+
+    //处理新消息
+    private fun addNewMessage(msg: ChatMessage) {
+        val currentList = _messages.value.toMutableList()
+        currentList.add(msg)
+        _messages.value = currentList
+        currentOffset++
     }
 
 }

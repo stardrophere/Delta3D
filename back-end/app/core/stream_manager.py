@@ -1,5 +1,3 @@
-# app/core/stream_manager.py
-
 import threading
 import time
 import sys
@@ -7,7 +5,6 @@ from pathlib import Path
 from typing import Optional
 import shutil
 
-# 引入你的鼠标控制类
 from app.window_controller.continuous import ContinuousController
 from app.process_manager.utils import ExternalCommandRunner
 
@@ -24,7 +21,7 @@ class InteractiveStreamSession:
         self.is_running = False
         self.process_thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
-        self.controller = ContinuousController()  # 你的连续控制器
+        self.controller = ContinuousController()
 
         # 状态记录
         self.current_asset_id: int | None = None
@@ -53,13 +50,13 @@ class InteractiveStreamSession:
             return
 
         print("正在停止推流会话...")
-        # 1. 停止鼠标操作
+        # 停止鼠标操作
         self.controller.stop()
 
-        # 2. 信号通知后台线程退出
+        # 信号通知后台线程退出
         self.stop_event.set()
 
-        # 3. 等待线程结束
+        # 等待线程结束
         if self.process_thread and self.process_thread.is_alive():
             self.process_thread.join(timeout=5)
 
@@ -72,26 +69,51 @@ class InteractiveStreamSession:
         if not self.is_running:
             return
 
-        # 1. 停止
+        # 停止
         if mode == "stop":
             self.controller.stop()
             return
 
-        # 2. 开始 (根据 action 调用不同的鼠标按键方法)
+        # 开始
+        # --- 速度配置参数 ---
+        # 旋转: 距离越大越快，时间越短越丝滑
+        ROTATE_DIST = 30
+        ROTATE_TIME = 0.01
 
-        # 旋转 = 左键拖拽
+        # 平移
+        PAN_DIST = 30
+        PAN_TIME = 0.01
+
+        # 缩放: 滚轮格数
+        ZOOM_STEP = 40
+        ZOOM_TIME = 0.01
+
+        # -----------------------------------
+
+        # 开始动作
         if action == "rotate":
-            # 你的 continuous.py 支持 "up", "down", "left", "right" 传给 start_rotate
-            self.controller.start_rotate(direction)
+            # 旋转 = 左键拖拽
+            self.controller.start_rotate(
+                direction,
+                distance_per_step=ROTATE_DIST,
+                duration=ROTATE_TIME
+            )
 
-        # 平移 = 中键拖拽
         elif action == "pan":
-            # 你的 continuous.py 也支持 "up", "down" 等传给 start_pan
-            self.controller.start_pan(direction)
+            # 平移 = 中键拖拽
+            self.controller.start_pan(
+                direction,
+                distance_per_step=PAN_DIST,
+                duration=PAN_TIME
+            )
 
-        # 缩放 = 滚轮
         elif action == "zoom":
-            self.controller.start_zoom(direction)
+            # 缩放 = 滚轮
+            self.controller.start_zoom(
+                direction,
+                scrolls_per_step=ZOOM_STEP,
+                delay=ZOOM_TIME
+            )
 
     def _run_processes(self, scene_path: str, snapshot_path: str):
         venv_python = r"D:\ProgramData\miniconda3\envs\instantNGP\python.exe"
@@ -106,8 +128,7 @@ class InteractiveStreamSession:
             "--scene", scene_path,
             "--load_snapshot", snapshot_path,
             "--gui",
-            # 建议先别加 --width/--height，除非你确认 run.py 支持
-            # "--width", "1280", "--height", "720",
+
         ]
 
         ffmpeg_cmd = [
@@ -143,8 +164,8 @@ class InteractiveStreamSession:
             "-rtsp_transport", "tcp",
             "-rtsp_flags", "prefer_tcp",
 
-"-muxdelay", "0",
-"-muxpreload", "0",
+            "-muxdelay", "0",
+            "-muxpreload", "0",
 
             "-f", "rtsp",
             self.rtsp_url,

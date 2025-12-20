@@ -244,6 +244,22 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Body request: SendMessageRequest
     ): ChatMessage
+
+    // 更新资产信息
+    @PATCH("api/v1/assets/{id}")
+    suspend fun updateAsset(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int,
+        @Body updateData: AssetUpdateRequest
+    ): AssetDetail
+
+    // 提交反馈
+    @POST("api/v1/assets/{id}/report")
+    suspend fun reportAsset(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int,
+        @Body reportData: ReportRequest
+    ): Map<String, String>
 }
 
 
