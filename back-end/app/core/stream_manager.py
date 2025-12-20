@@ -77,16 +77,16 @@ class InteractiveStreamSession:
         # 开始
         # --- 速度配置参数 ---
         # 旋转: 距离越大越快，时间越短越丝滑
-        ROTATE_DIST = 30
-        ROTATE_TIME = 0.01
+        ROTATE_DIST = 15
+        ROTATE_TIME = 0.05
 
         # 平移
-        PAN_DIST = 30
-        PAN_TIME = 0.01
+        PAN_DIST = 20
+        PAN_TIME = 0.05
 
         # 缩放: 滚轮格数
-        ZOOM_STEP = 40
-        ZOOM_TIME = 0.01
+        ZOOM_STEP = 20
+        ZOOM_TIME = 0.05
 
         # -----------------------------------
 
