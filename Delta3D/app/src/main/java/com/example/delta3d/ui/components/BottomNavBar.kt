@@ -60,11 +60,11 @@ sealed class BottomNavItem(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    object Home : BottomNavItem("home", "主页", Icons.Filled.Home, Icons.Outlined.Home)
+    object Home : BottomNavItem("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
     object Community :
-        BottomNavItem("community", "社区", Icons.Filled.Whatshot, Icons.Outlined.Whatshot)
+        BottomNavItem("community", "Community", Icons.Filled.Whatshot, Icons.Outlined.Whatshot)
 
-    object Profile : BottomNavItem("profile", "我的", Icons.Filled.Person, Icons.Outlined.Person)
+    object Profile : BottomNavItem("profile", "Profile", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
 @Composable
