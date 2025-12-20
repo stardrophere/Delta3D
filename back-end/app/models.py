@@ -67,8 +67,8 @@ class InteractionLike(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-DEFAULT_AVATAR = "/static/uploads/avatars/default.png"
-DEFAULT_COVER = "/static/uploads/avatars/default_cover.png"
+DEFAULT_AVATAR = "/static/avatars/default.png"
+DEFAULT_COVER = "/static/avatars/default_cover.png"
 
 
 # =============================================================================

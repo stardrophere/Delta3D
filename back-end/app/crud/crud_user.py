@@ -33,7 +33,7 @@ def toggle_follow(session: Session, follower_id: int, followed_id: int) -> tuple
         # --- 取消关注 ---
         session.delete(link)
 
-        # 更新计数 (防止减成负数)
+        # 更新计数
         follower.following_count = max(0, follower.following_count - 1)
         target_user.follower_count = max(0, target_user.follower_count - 1)
 
@@ -60,16 +60,16 @@ def toggle_follow(session: Session, follower_id: int, followed_id: int) -> tuple
     return is_following, target_user.follower_count
 
 
-DEFAULT_AVATAR = "/static/uploads/avatars/default.png"
-DEFAULT_COVER = "/static/uploads/avatars/default.png"
+DEFAULT_AVATAR = "/static/avatars/default.png"
+DEFAULT_COVER = "/static/avatars/default_cover.png"
 
 
 def create_user(session: Session, user_in: UserCreate) -> User:
     """创建新用户"""
-    # 1. 将明文密码加密
+    # 将明文密码加密
     hashed_password = get_password_hash(user_in.password)
 
-    # 2. 创建数据库对象
+    # 创建数据库对象
     db_user = User(
         username=user_in.username,
         password_hash=hashed_password,
@@ -77,7 +77,7 @@ def create_user(session: Session, user_in: UserCreate) -> User:
         cover_url=DEFAULT_COVER
     )
 
-    # 3. 存入数据库
+    # 存入数据库
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
@@ -124,7 +124,7 @@ def update_profile(session: Session, user_id: int, user_in: UserUpdate) -> User:
     if not user:
         return None
 
-    # 排除没有传的字段 (exclude_unset=True)
+    # 排除没有传的字段
     update_data = user_in.model_dump(exclude_unset=True)
 
     for key, value in update_data.items():

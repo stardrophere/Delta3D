@@ -21,7 +21,7 @@ def get_posts_by_user(
     查询 target_user_id 发布的所有帖子。
     同时计算 current_user_id 是否点过赞。
     """
-    # 1. 查询该用户发布的所有帖子 (按时间倒序)
+    # 查询该用户发布的所有帖子
     statement = (
         select(CommunityPost)
         .where(CommunityPost.user_id == target_user_id)
@@ -31,11 +31,11 @@ def get_posts_by_user(
 
     results = []
     for post in posts:
-        # 2. 获取关联的资产信息 (Asset)
+        # 获取关联的资产信息
         asset = post.asset
         author = post.author
 
-        # 3. 检查当前用户是否点赞
+        # 检查当前用户是否点赞
         # 查询 InteractionLike 表，看有没有 (user_id, post_id) 的记录
         like_stat = select(InteractionLike).where(
             InteractionLike.user_id == current_user_id,
@@ -43,13 +43,13 @@ def get_posts_by_user(
         )
         is_liked = session.exec(like_stat).first() is not None
 
-        # 4. 组装数据
+        # 组装数据
         results.append({
             "post_id": post.id,
             "asset_id": asset.id,
             "title": asset.title,
             "cover_url": asset.video_path,
-            "description": post.content or asset.description,  # 优先用帖子文案
+            "description": post.content or asset.description,
             "tags": asset.tags,
             "like_count": post.like_count,
             "is_liked": is_liked,
@@ -62,10 +62,9 @@ def get_posts_by_user(
 
 # app/crud/crud_post.py
 
-# 1. 增加新的 import (or_, and_, col)
+
 from sqlmodel import Session, select, or_, and_, col
 from typing import List
-# ... 其他原本的 import 保持不变 ...
 from app.models import (
     CommunityPost, ModelAsset, InteractionLike,
     PostCollection, Comment, UserFollow, User, Visibility
@@ -173,10 +172,10 @@ def create_post(session: Session, user_id: int, post_in: PostCreate) -> Communit
         user_id=user_id,
         asset_id=post_in.asset_id,
         content=post_in.content,
-        # 将字符串 "public"/"private" 转换为枚举对象
+
         visibility=Visibility(post_in.visibility),
         allow_download=post_in.allow_download,
-        # published_at 会由数据库默认值自动生成，也可以手动指定
+        # published_at
     )
     session.add(db_post)
     session.commit()
@@ -192,25 +191,25 @@ def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int
     Returns:
         (is_liked: bool, new_like_count: int)
     """
-    # 1. 查帖子 (不存在直接返回)
+    # 查帖子
     post = session.get(CommunityPost, post_id)
     if not post:
         return False, 0
 
-    # 2. 查当前用户的点赞记录
+    # 查当前用户的点赞记录
     statement = select(InteractionLike).where(
         InteractionLike.user_id == user_id,
         InteractionLike.post_id == post_id
     )
     like_record = session.exec(statement).first()
 
-    # 3. 查作者 (用于更新作者的获赞总数)
+    # 查作者
     author = session.get(User, post.user_id)
 
     if like_record:
         # --- 情况 A: 已点赞 -> 执行取消 ---
         session.delete(like_record)
-        post.like_count = max(0, post.like_count - 1)  # 防止减成负数
+        post.like_count = max(0, post.like_count - 1)
         if author:
             author.liked_total_count = max(0, author.liked_total_count - 1)
         is_active = False
@@ -223,13 +222,13 @@ def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int
             author.liked_total_count += 1
         is_active = True
 
-    # 4. 提交事务
+    # 提交事务
     session.add(post)
     if author:
         session.add(author)
 
     session.commit()
-    session.refresh(post)  # 刷新以获取最新 count
+    session.refresh(post)
 
     return is_active, post.like_count
 
@@ -423,7 +422,7 @@ def get_my_collected_posts(session: Session, current_user_id: int) -> List[dict]
     按收藏时间倒序排列
     """
     # 从 PostCollection 表找到对应的 CommunityPost
-    # 我们希望按收藏的时间(PostCollection.created_at)倒序，而不是帖子发布时间
+    # 倒序
     statement = (
         select(CommunityPost)
         .join(PostCollection, CommunityPost.id == PostCollection.post_id)

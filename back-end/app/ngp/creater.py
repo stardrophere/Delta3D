@@ -60,7 +60,7 @@ def train_ngp_from_video(
     video_dir = Path(video_path).resolve().parent
     transforms_path = video_dir / "transforms.json"
 
-    # 1) colmap2nerf：视频 -> transforms.json（+ 数据文件夹）
+    # colmap2nerf：视频 -> transforms.json
     colmap_cmd = [
         venv_python,
         colmap2nerf_script,
@@ -86,7 +86,7 @@ def train_ngp_from_video(
     if not Path(transforms_path).exists():
         raise RuntimeError(f"transforms.json 未生成：{transforms_path}")
 
-    # 2) 训练并保存 snapshot
+    # 练并保存 snapshot
     # snapshot_path.parent.mkdir(parents=True, exist_ok=True)
 
     train_cmd = [

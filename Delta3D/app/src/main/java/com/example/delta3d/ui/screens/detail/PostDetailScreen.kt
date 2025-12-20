@@ -169,7 +169,8 @@ fun PostDetailScreen(
                         Box {
                             ImageCarouselHeader(
                                 videoUrl = asset.videoUrl,
-                                modifier = Modifier.height(300.dp)
+                                status = asset.status,
+                                modifier = Modifier.height(300.dp),
                             )
 
                             // 返回按钮

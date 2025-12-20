@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -165,7 +166,7 @@ fun AssetDetailScreen(
                         .padding(bottom = 140.dp)
                 ) {
                     // 视频区域
-                    ImageCarouselHeader(videoUrl = detail.videoUrl)
+                    ImageCarouselHeader(videoUrl = detail.videoUrl, status = detail.status)
 
                     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)) {
 
@@ -255,7 +256,7 @@ fun AssetDetailScreen(
                             }
 
                             "report" -> showReportDialog = true
-                            // "delete" -> 移除
+                            // "delete"
                         }
                     }
                 )
@@ -1149,7 +1150,40 @@ fun DetailSection(title: String, content: String, isItalic: Boolean = false) {
 // 组件：顶部图片轮播
 // ------------------------------------
 @Composable
-fun ImageCarouselHeader(videoUrl: String?, modifier: Modifier = Modifier) {
+fun ImageCarouselHeader(
+    videoUrl: String?,
+    status: String,
+    modifier: Modifier = Modifier
+) {
+    // 处理失败状态
+    if (status == "failed" || status == "error") {
+        val errorImageUrl = remember {
+            val base = RetrofitClient.BASE_URL.removeSuffix("/")
+            "$base/static/states/error.png"
+        }
+
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .background(Color(0xFF1E1E1E)),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = errorImageUrl,
+                contentDescription = "Processing Failed",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+//                    .padding(40.dp)
+                    .alpha(0.8f)
+            )
+        }
+        return
+    }
+
+
+    // 生成随机预览图链接
     val imageUrls = remember(videoUrl) {
         if (videoUrl == null) emptyList() else generateRandomImageUrls(videoUrl, count = 5)
     }
@@ -1172,6 +1206,7 @@ fun ImageCarouselHeader(videoUrl: String?, modifier: Modifier = Modifier) {
         return
     }
 
+    // 轮播逻辑
     val pagerState = rememberPagerState(pageCount = { imageUrls.size })
 
     LaunchedEffect(pagerState) {
@@ -1181,6 +1216,7 @@ fun ImageCarouselHeader(videoUrl: String?, modifier: Modifier = Modifier) {
                 val nextPage = (pagerState.currentPage + 1) % imageUrls.size
                 pagerState.animateScrollToPage(nextPage)
             } catch (e: Exception) {
+
             }
         }
     }
@@ -1216,6 +1252,7 @@ fun ImageCarouselHeader(videoUrl: String?, modifier: Modifier = Modifier) {
                 )
         )
 
+        // 轮播指示器
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1244,7 +1281,7 @@ private fun generateRandomImageUrls(baseUrlRaw: String, count: Int): List<String
     else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${baseUrlRaw.removePrefix("/")}"
 
     val cleanBase = baseUrl.substringBefore("?").substringBeforeLast("/video.mp4")
-    val indices = (1..100).shuffled().take(count).sorted()
+    val indices = (1..60).shuffled().take(count).sorted()
     return indices.map { index ->
         val fileName = "%04d.jpg".format(index)
         "$cleanBase/images/$fileName"
