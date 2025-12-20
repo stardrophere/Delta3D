@@ -312,7 +312,16 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     userId = userId,
                     listType = type,
                     onBack = { navController.popBackStack() },
-                    onUserClick = { targetId ->
+                    // 接收 id 和 username 并跳转
+                    onUserClick = { targetId, targetName ->
+                        val currentUserId = sessionVm.currentUser.value?.id
+
+                        if (targetId != currentUserId) {
+                            // 跳转到聊天页面
+                            navController.navigate("chat/$targetId/$targetName")
+                        } else {
+                            // Log.d("Nav", "Cannot chat with yourself")
+                        }
                     }
                 )
             }

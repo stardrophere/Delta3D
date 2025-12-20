@@ -148,9 +148,9 @@ fun PlanSettingsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(32.dp))
 
-            // 模拟权益列表
+            // 权益列表
             FeatureItem(text = "Unlimited Downloads", icon = Icons.Rounded.AutoAwesome)
-            FeatureItem(text = "4K Model Preview", icon = Icons.Rounded.AutoAwesome)
+//            FeatureItem(text = "4K Model Preview", icon = Icons.Rounded.AutoAwesome)
             FeatureItem(text = "Priority Support", icon = Icons.Rounded.AutoAwesome)
 
             Spacer(Modifier.height(32.dp))

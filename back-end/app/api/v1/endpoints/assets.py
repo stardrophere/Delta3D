@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 from sqlmodel import Session
@@ -9,7 +10,7 @@ from pathlib import Path
 
 from app.database import get_session
 from app.models import User, ModelAsset
-from app.schemas import AssetCard, DownloadResponse, DownloadFileType
+from app.schemas import AssetCard, DownloadResponse, DownloadFileType, AssetUpdate, AssetReport
 from app.api.deps import get_current_user
 from app.crud import crud_asset
 from app.core.config import settings
@@ -243,3 +244,70 @@ def read_my_downloads(
     """
     assets = crud_asset.get_my_downloaded_assets(session=session, user_id=current_user.id)
     return assets
+
+
+# 更新资产信息接口
+@router.patch("/{asset_id}", response_model=AssetDetail)
+def update_asset(
+        asset_id: int,
+        update_data: AssetUpdate,
+        session: Session = Depends(get_session),
+        current_user: User = Depends(get_current_user)
+):
+    asset = session.get(ModelAsset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    if asset.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    # 更新字段
+    if update_data.title is not None:
+        asset.title = update_data.title
+    if update_data.description is not None:
+        asset.description = update_data.description
+    if update_data.remark is not None:
+        asset.remark = update_data.remark
+    if update_data.tags is not None:
+        asset.tags = update_data.tags
+
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+
+    # 返回更新后的详情结构
+    return AssetDetail(
+        id=asset.id,
+        title=asset.title,
+        description=asset.description,
+        remark=asset.remark,
+        tags=asset.tags,
+        video_url=asset.video_path,
+        model_url=asset.model_path,
+        status=asset.status,
+        created_at=str(asset.created_at),
+        estimated_gen_seconds=asset.estimated_gen_seconds
+    )
+
+
+# 举报/反馈接口 (写入本地文件)
+@router.post("/{asset_id}/report")
+def report_issue(
+        asset_id: int,
+        report: AssetReport,
+        current_user: User = Depends(get_current_user)
+):
+    log_file = Path("asset_reports.log")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    log_entry = (
+        f"[{timestamp}] REPORT | AssetID: {asset_id} | User: {current_user.username} (ID:{current_user.id}) | "
+        f"Category: {report.category} | Content: {report.content}\n"
+    )
+
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+        return {"status": "success", "message": "Report logged."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to log report")

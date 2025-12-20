@@ -91,12 +91,29 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
 
-    // 监听滚动到顶部，触发加载更多历史记录
+    var hasInitialScrolled by remember { mutableStateOf(false) } //初次滚动标记
+
+
+    //处理初始加载: 数据来了后，瞬间跳到底部，并锁定 history 加载
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty() && !hasInitialScrolled) {
+            listState.scrollToItem(messages.size - 1)
+            hasInitialScrolled = true
+        }
+    }
+    // 只有在初始滚动完成后，收到新消息才做平滑滚动
+    LaunchedEffect(messages.lastOrNull()?.id) {
+        if (messages.isNotEmpty() && hasInitialScrolled) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // 处理历史加载只有当“初始滚动”完成后，才允许触发
     val isAtTop by remember {
         derivedStateOf {
             val firstIndex = listState.firstVisibleItemIndex
             val firstOffset = listState.firstVisibleItemScrollOffset
-            firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
+            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
         }
     }
 

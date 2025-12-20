@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.AssetDetail
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.ui.components.FeedbackType
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
@@ -87,6 +88,7 @@ fun AssetDetailScreen(
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
 
     // 菜单状态
     var showMenu by remember { mutableStateOf(false) }
@@ -243,11 +245,17 @@ fun AssetDetailScreen(
                         showMenu = false
                         when (action) {
                             "edit" -> showEditDialog = true
-                            "delete" -> { /* TODO: 删除逻辑 */
+                            "rerun" -> {
+                                scope.launch {
+                                    feedbackState.show(
+                                        msg = "Server resource limited: Cannot re-run process.",
+                                        feedbackType = FeedbackType.INFO
+                                    )
+                                }
                             }
 
-                            "rerun" -> { /* TODO: 重新运行任务 */
-                            }
+                            "report" -> showReportDialog = true
+                            // "delete" -> 移除
                         }
                     }
                 )
@@ -260,7 +268,7 @@ fun AssetDetailScreen(
                 ) {
                     GlassBottomDock(
                         onPreview = {
-                            Log.d("TRACK_ID", "1. [DetailScreen] 点击按钮, 准备跳转 ID: $assetId")
+                            Log.d("TRACK_ID", "[DetailScreen] 点击按钮, 准备跳转 ID: $assetId")
                             onPreviewClick()
                         },
                         onDownload = { showDownloadDialog = true },
@@ -302,13 +310,42 @@ fun AssetDetailScreen(
                     )
                 }
 
+                // 编辑弹窗
                 if (showEditDialog) {
-                    CustomGlassDialog(
-                        title = "Edit Info",
-                        text = "Edit title, tags and description functionality would go here.",
-                        confirmText = "Save",
-                        onDismiss = { showEditDialog = false },
-                        onConfirm = { showEditDialog = false }
+                    val currentData = (uiState as? DetailUiState.Success)?.data
+                    if (currentData != null) {
+                        GlassyEditAssetDialog(
+                            initialTitle = currentData.title,
+                            initialDesc = currentData.description ?: "",
+                            initialRemark = currentData.remark ?: "",
+                            initialTags = currentData.tags,
+                            onDismiss = { showEditDialog = false },
+                            onConfirm = { title, desc, remark, tags ->
+                                token?.let {
+                                    detailVm.updateAssetInfo(it, assetId, title, desc, remark, tags)
+                                }
+                                showEditDialog = false
+                            }
+                        )
+                    }
+                }
+
+                // 举报弹窗
+                if (showReportDialog) {
+                    ReportIssueDialog(
+                        onDismiss = { showReportDialog = false },
+                        onSubmit = { category, content ->
+                            token?.let {
+                                detailVm.reportIssue(it, assetId, category, content) {
+                                    Toast.makeText(
+                                        context,
+                                        "Report sent. Thank you.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            showReportDialog = false
+                        }
                     )
                 }
             }
@@ -509,11 +546,7 @@ fun TopNavBar(
                     onClick = { onMenuItemClick("report") },
                     leadingIcon = { Icon(Icons.Default.Flag, null, tint = Color.White) }
                 )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = ErrorColor) },
-                    onClick = { onMenuItemClick("delete") },
-                    leadingIcon = { Icon(Icons.Default.DeleteForever, null, tint = ErrorColor) }
-                )
+                // Delete 移除
             }
         }
     }
@@ -1340,5 +1373,286 @@ fun formatUtcToGmt8YmdHm(createdAtStr: String): String {
         formatter.format(date)
     } catch (e: Exception) {
         createdAtStr
+    }
+}
+
+//输入框
+@Composable
+fun GlassyInputSimple(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    singleLine: Boolean = true,
+    minLines: Int = 1
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, color = Color.White.copy(0.5f)) },
+        singleLine = singleLine,
+        minLines = minLines,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = Color.Black.copy(0.3f),
+            unfocusedContainerColor = Color.Black.copy(0.2f),
+            focusedBorderColor = AccentColor,
+            unfocusedBorderColor = Color.White.copy(0.1f),
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            cursorColor = AccentColor,
+            focusedLabelColor = AccentColor
+        )
+    )
+}
+
+@Composable
+fun ReportIssueDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (String, String) -> Unit
+) {
+    var content by remember { mutableStateOf("") }
+    val categories = listOf("Bug", "Inappropriate", "Copyright", "Other")
+    var selectedCategory by remember { mutableStateOf(categories[0]) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(0.15f),
+                            Color.White.copy(0.05f)
+                        )
+                    ),
+                    RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF1E1E1E).copy(alpha = 0.95f))
+                .padding(24.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    "Report Issue",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    "Why are you reporting this?",
+                    color = Color.White.copy(0.7f),
+                    fontSize = 14.sp
+                )
+
+                // Categories
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    categories.forEach { cat ->
+                        FilterChip(
+                            selected = (cat == selectedCategory),
+                            onClick = { selectedCategory = cat },
+                            label = { Text(cat) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentColor,
+                                selectedLabelColor = Color.Black,
+                                containerColor = Color.White.copy(0.05f),
+                                labelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
+                GlassyInputSimple(
+                    value = content,
+                    onValueChange = { content = it },
+                    label = "Describe the issue...",
+                    singleLine = false,
+                    minLines = 4
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.1f))
+                    ) { Text("Cancel", color = Color.White) }
+
+                    Button(
+                        onClick = { onSubmit(selectedCategory, content) },
+                        enabled = content.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252)) // Red for report
+                    ) { Text("Report", color = Color.White, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+    }
+}
+
+
+//编辑栏
+@Composable
+fun GlassyEditAssetDialog(
+    initialTitle: String,
+    initialDesc: String,
+    initialRemark: String,
+    initialTags: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String, List<String>) -> Unit
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var description by remember { mutableStateOf(initialDesc) }
+    var remark by remember { mutableStateOf(initialRemark) }
+
+    // 标签状态
+    val tags = remember { mutableStateListOf<String>().apply { addAll(initialTags) } }
+    var currentTagInput by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(0.15f),
+                            Color.White.copy(0.05f)
+                        )
+                    ),
+                    RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF1E1E1E).copy(alpha = 0.95f)) // 深色半透明背景
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Edit Model Info",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, "Close", tint = Color.White.copy(0.6f))
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(0.1f))
+
+                // Inputs
+                GlassyInputSimple(value = title, onValueChange = { title = it }, label = "Title")
+
+                GlassyInputSimple(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = "Description",
+                    singleLine = false,
+                    minLines = 3
+                )
+
+                GlassyInputSimple(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = "Private Remark",
+                    singleLine = false,
+                    minLines = 2
+                )
+
+                // Tags Section
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Tags",
+                        color = AccentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (tags.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            tags.forEach { tag ->
+                                Surface(
+                                    color = AccentColor.copy(0.15f),
+                                    shape = RoundedCornerShape(50),
+                                    border = BorderStroke(1.dp, AccentColor.copy(0.3f)),
+                                    modifier = Modifier.clickable { tags.remove(tag) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(
+                                            horizontal = 10.dp,
+                                            vertical = 5.dp
+                                        ), verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(tag, color = AccentColor, fontSize = 12.sp)
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(
+                                            Icons.Default.Close,
+                                            null,
+                                            tint = AccentColor,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add Tag Input
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) {
+                            GlassyInputSimple(
+                                value = currentTagInput,
+                                onValueChange = { currentTagInput = it },
+                                label = "Add tag..."
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                if (currentTagInput.isNotBlank() && currentTagInput !in tags) {
+                                    tags.add(currentTagInput.trim())
+                                    currentTagInput = ""
+                                }
+                            },
+                            modifier = Modifier.background(Color.White.copy(0.1f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Add, null, tint = Color.White)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Save Button
+                Button(
+                    onClick = { onConfirm(title, description, remark, tags) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                    shape = RoundedCornerShape(25.dp)
+                ) {
+                    Text("SAVE CHANGES", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

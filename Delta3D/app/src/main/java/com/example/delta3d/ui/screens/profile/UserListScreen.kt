@@ -48,7 +48,7 @@ fun UserListScreen(
     userId: Int,
     listType: String,
     onBack: () -> Unit,
-    onUserClick: (Int) -> Unit,
+    onUserClick: (Int, String) -> Unit,
     viewModel: ProfileViewModel = viewModel()
 ) {
     val token by sessionVm.token.collectAsState()
@@ -109,8 +109,8 @@ fun UserListScreen(
                     items(userList) { user ->
                         UserListItem(
                             user = user,
-                            onUserClick = { onUserClick(user.id) },
-                            // 仅在 Following 列表中显示操作逻辑
+                            // 同时传递 ID 和 Username
+                            onUserClick = { onUserClick(user.id, user.username) },
                             showUnfollow = listType == "following",
                             onUnfollow = {
                                 token?.let { viewModel.toggleFollowInList(user.id, it) }
