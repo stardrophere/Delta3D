@@ -158,7 +158,7 @@ class ChatViewModel(
 
 
                     val currentList = _messages.value
-                    _messages.value = newMessagesAsc + currentList
+                    _messages.value = (newMessagesAsc + currentList).distinctBy { it.id }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

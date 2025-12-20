@@ -227,7 +227,7 @@ fun DownloadHistoryItem(
                 )
                 Text(
                     text = TimeUtils.formatToEastEight(asset.downloadedAt), // 格式化时间
-                    color = Color(0xFF64FFDA), // 高亮时间
+                    color = Color(0xFF64FFDA),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )

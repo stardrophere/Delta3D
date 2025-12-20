@@ -66,12 +66,12 @@ fun ChatScreen(
     val user by sessionVm.currentUser.collectAsState()
     val token by sessionVm.token.collectAsState()
 
-    // 初始化 ViewModel
+
     val viewModel: ChatViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ChatViewModel(
-                    socketManager = ChatSocketManager, // 传入单例对象
+                    socketManager = ChatSocketManager, // socket
                     myUserId = user?.id ?: 0,
                     targetUserId = targetUserId,
                     token = token ?: ""
@@ -87,43 +87,51 @@ fun ChatScreen(
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
     val targetAvatar by viewModel.targetAvatarUrl.collectAsState()
 
+    // 提前去重
+    val uniqueMessages = remember(messages) {
+        messages.distinctBy { it.id }
+    }
+
     val listState = rememberLazyListState()
 
-    // 标记是否已经完成了初始化的“瞬间到底”
+
     var hasInitialScrolled by remember { mutableStateOf(false) }
 
 
-    // 处理初始加载：历史记录加载出来后，瞬间跳到底部
-    LaunchedEffect(messages.size) {
-        // 只有在消息列表非空，且从未执行过初始滚动时触发
-        if (messages.isNotEmpty() && !hasInitialScrolled) {
-            listState.scrollToItem(messages.size - 1)
-            hasInitialScrolled = true
-        }
-    }
+    LaunchedEffect(uniqueMessages) {
+        if (uniqueMessages.isNotEmpty()) {
+            val headerOffset = if (isLoadingHistory) 1 else 0
+            val lastIndex = uniqueMessages.size + headerOffset - 1
 
-    // 处理新消息：平滑滚动
-    // 只有在“初始滚动”已经完成后，收到新消息才做动画
-    LaunchedEffect(messages.lastOrNull()?.id) {
-        if (messages.isNotEmpty() && hasInitialScrolled) {
-            // 智能滚动判断：
-            val isAtBottom = !listState.canScrollForward
-            val lastMsg = messages.last()
-            val isMe = lastMsg.isMe(user?.id ?: 0)
+            // 确保索引有效
+            if (lastIndex >= 0) {
+                if (!hasInitialScrolled) {
+                    listState.scrollToItem(lastIndex)
+                    hasInitialScrolled = true
+                } else {
+                    val isAtBottom = !listState.canScrollForward
+                    val lastMsg = uniqueMessages.last()
+                    val isMe = lastMsg.isMe(user?.id ?: 0)
 
-            if (isMe || isAtBottom) {
-                listState.animateScrollToItem(messages.size - 1)
+                    if (isMe || isAtBottom) {
+                        try {
+                            listState.animateScrollToItem(lastIndex)
+                        } catch (e: Exception) {
+                            listState.scrollToItem(lastIndex)
+                        }
+                    }
+                }
             }
         }
     }
-
 
     // 只有当“初始滚动”完成后，才允许触发加载更多，防止刚进页面就触发加载
     val isAtTop by remember {
         derivedStateOf {
             val firstIndex = listState.firstVisibleItemIndex
             val firstOffset = listState.firstVisibleItemScrollOffset
-            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
+            // 这里用 uniqueMessages 判断非空更稳妥
+            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && uniqueMessages.isNotEmpty()
         }
     }
 
@@ -203,7 +211,7 @@ fun ChatScreen(
                 }
 
                 items(
-                    items = messages,
+                    items = uniqueMessages, // 去重列表
                     key = { it.id }
                 ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
@@ -254,9 +262,10 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
             horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            if (ShareLinkUtils.isPostShareLink(msg.content)) {
+            if (ShareLinkUtils.isPostShareLink(msg.getSafeContent())) {
                 // 解析数据
-                val shareData = remember(msg.content) { ShareLinkUtils.parsePostLink(msg.content) }
+                val shareData =
+                    remember(msg.content) { ShareLinkUtils.parsePostLink(msg.getSafeContent()) }
 
                 if (shareData != null) {
                     PostShareCard(
@@ -266,11 +275,11 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
                     )
                 } else {
                     // 解析失败兜底显示文本
-                    BubbleContent(msg.content, isMe)
+                    BubbleContent(msg.getSafeContent(), isMe)
                 }
             } else {
                 // 普通文本
-                BubbleContent(msg.content, isMe)
+                BubbleContent(msg.getSafeContent(), isMe)
             }
 
             // 时间显示 ---
