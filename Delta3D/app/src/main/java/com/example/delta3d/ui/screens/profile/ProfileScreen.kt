@@ -37,8 +37,13 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.ui.components.GlassyFeedbackPopup
+import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+
 
 // --- 样式常量 ---
 private val AccentColor = Color(0xFF64FFDA)
@@ -61,12 +66,18 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
 
+    // 协程作用域，用于处理延时和异步操作
+    val scope = rememberCoroutineScope()
+
+    val feedbackState = rememberFeedbackState()
+
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         sessionVm.refreshUserInfo()
     }
 
     var showEditDialog by remember { mutableStateOf(false) }
-
 
     val blurRadius by animateDpAsState(
         targetValue = if (showEditDialog) 20.dp else 0.dp,
@@ -123,7 +134,7 @@ fun ProfileScreen(
                 ) {
 
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        // 封面背景
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -364,13 +375,14 @@ fun ProfileScreen(
                             "Plan Settings",
                             "Upgrade to Pro",
                             Color(0xFFFFD700)
-                        ) {onNavigateToPlanSettings()}
+                        ) { onNavigateToPlanSettings() }
 
                         GlassCard {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { sessionVm.logout() }
+
+                                    .clickable { showLogoutDialog = true }
                                     .padding(12.dp),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
@@ -397,18 +409,48 @@ fun ProfileScreen(
             }
         }
 
+        //退出确认对话框
+        if (showLogoutDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                containerColor = Color(0xFF1E1E1E), // 深色背景
+                title = {
+                    Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text("Are you sure you want to log out?", color = Color.White.copy(0.7f))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
 
+                            scope.launch {
+                                feedbackState.showSuccess("Logged out successfully")
+                                delay(600)
+                                sessionVm.logout()
+                            }
+                        }
+                    ) {
+                        Text("Log Out", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutDialog = false }) {
+                        Text("Cancel", color = Color.White.copy(0.6f))
+                    }
+                }
+            )
+        }
+
+        // 编辑个人资料的弹窗
         AnimatedVisibility(
             visible = showEditDialog,
             enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-
             exit = fadeOut(animationSpec = tween(durationMillis = 250)),
             modifier = Modifier.zIndex(10f)
         ) {
-
             BackHandler { showEditDialog = false }
-
-            // 全屏遮罩层
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -416,14 +458,13 @@ fun ProfileScreen(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { showEditDialog = false }, // 点击空白处关闭
+                    ) { showEditDialog = false },
                 contentAlignment = Alignment.Center
             ) {
-                // 内容容器 (阻止点击事件穿透)
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 24.dp)
-                        .clickable(enabled = false) {} // 拦截点击
+                        .clickable(enabled = false) {}
                 ) {
                     EditProfilePanel(
                         currentName = currentUser?.username ?: "",
@@ -439,6 +480,7 @@ fun ProfileScreen(
             }
         }
 
+        // Loading Indicator
         AnimatedVisibility(
             visible = isLoading,
             enter = fadeIn(),
@@ -454,6 +496,9 @@ fun ProfileScreen(
                 CircularProgressIndicator(color = AccentColor)
             }
         }
+
+
+        GlassyFeedbackPopup(state = feedbackState, modifier = Modifier.align(Alignment.TopCenter))
     }
 }
 

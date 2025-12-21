@@ -78,18 +78,18 @@ def update_my_avatar(
     """
     上传并更新当前用户的头像
     """
-    # 1. 简单校验文件类型
+    # 简单校验文件类型
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="只能上传图片文件")
 
-    # 2. 生成唯一文件名 (user_id + uuid + 后缀)
+    # 生成唯一文件名 (user_id + uuid + 后缀)
     ext = file.filename.split(".")[-1] if "." in file.filename else "png"
     new_filename = f"{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
 
     disk_path = AVATAR_UPLOAD_ROOT / new_filename
     web_path = f"/static/uploads/avatars/{new_filename}"
 
-    # 3. 保存文件
+    # 保存文件
     try:
         with disk_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -98,7 +98,7 @@ def update_my_avatar(
     finally:
         file.file.close()
 
-    # 4. 更新数据库
+    # 更新数据库
     updated_user = crud_user.update_avatar(session, current_user.id, web_path)
 
     # 返回最新的用户详情
@@ -227,14 +227,13 @@ def update_user_me(
     """
     更新当前用户的基本信息 (昵称、简介、性别)
     """
-    # 果尝试修改用户名，检查唯一性
+    # 尝试修改用户名，检查唯一性
     if user_in.username and user_in.username != current_user.username:
         existing_user = crud_user.get_user_by_username(session, username=user_in.username)
         if existing_user:
             raise HTTPException(status_code=400, detail="该用户名已被使用")
 
     # 执行更新
-    # 注意：如果 user_in.gender 传了非法字符串，SQLModel/Enum 可能会报错，
     try:
         updated_user = crud_user.update_profile(session, current_user.id, user_in)
     except Exception as e:
