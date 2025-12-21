@@ -271,9 +271,27 @@ fun RegisterScreen(
                             feedbackState.showSuccess("Registration success: ${response.username}")
                             delay(1000)
                             onRegisterSuccess() // 返回登录页
+
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            feedbackState.showError("Registration failed: the username may already exist")
+                            val errorMessage = when (e) {
+                                is retrofit2.HttpException -> {
+                                    try {
+                                        val errorBody = e.response()?.errorBody()?.string()
+                                        if (errorBody != null && errorBody.contains("detail")) {
+                                            "Registration failed: Username already taken"
+                                        } else {
+                                            "Registration failed"
+                                        }
+                                    } catch (parseEx: Exception) {
+                                        "Registration failed: ${e.code()}"
+                                    }
+                                }
+
+                                is java.io.IOException -> "Network error. Please check your connection."
+                                else -> "An unknown error occurred"
+                            }
+                            feedbackState.showError(errorMessage)
                         } finally {
                             isLoading = false
                         }

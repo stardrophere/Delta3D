@@ -188,7 +188,7 @@ fun DownloadHistoryItem(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // 如果不是Owner，显示一个小锁图标提示
+                // 示一个小锁图标提示
                 if (!isOwner) {
                     Box(
                         modifier = Modifier

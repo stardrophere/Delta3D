@@ -10,7 +10,7 @@ from app.core.security import verify_password, create_access_token
 router = APIRouter()
 
 
-# 1. 注册接口
+# 注册接口
 @router.post("/register", response_model=UserOut)
 def register(user_in: UserCreate, session: Session = Depends(get_session)):
     # 检查用户名是否已存在
@@ -25,13 +25,13 @@ def register(user_in: UserCreate, session: Session = Depends(get_session)):
     return new_user
 
 
-# 2. 登录接口
+# 登录接口
 @router.post("/login", response_model=Token)
 def login(
         form_data: OAuth2PasswordRequestForm = Depends(),
         session: Session = Depends(get_session)
 ):
-    # form_data.username 和 form_data.password 是前端传来的
+    # form_data.username 和 form_data.password
     user = crud_user.get_user_by_username(session, username=form_data.username)
 
     # 验证账号和密码

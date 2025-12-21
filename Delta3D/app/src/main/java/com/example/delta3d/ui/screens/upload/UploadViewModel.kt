@@ -126,12 +126,21 @@ class UploadViewModel : ViewModel() {
             try {
                 val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
                 val assets = RetrofitClient.api.getAssets(authHeader)
+
+                // 获取用户使用过的标签
                 val userUsedTags = assets
                     .flatMap { it.tags }
                     .filter { it.isNotBlank() }
                     .toSet()
-                val combinedTags = (userUsedTags + defaultTags).distinct().sorted()
-                _suggestedTags.value = combinedTags
+
+
+                val finalTags = if (userUsedTags.isNotEmpty()) {
+                    userUsedTags.toList().sorted()
+                } else {
+                    defaultTags // 仅在没有历史标签时作为兜底
+                }
+
+                _suggestedTags.value = finalTags
             } catch (e: Exception) {
                 e.printStackTrace()
             }

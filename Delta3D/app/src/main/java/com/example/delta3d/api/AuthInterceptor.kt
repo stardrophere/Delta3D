@@ -10,7 +10,6 @@ class AuthInterceptor : Interceptor {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        // 检查后端是否返回了 401 未授权
         if (response.code == 401) {
             // 触发全局登出事件
             AuthEvents.triggerUnauthorized()
