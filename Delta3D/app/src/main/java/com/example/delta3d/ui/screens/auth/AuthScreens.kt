@@ -1,21 +1,46 @@
 package com.example.delta3d.ui.screens.auth
 
 
-import android.R.attr.delay
-import android.widget.Toast
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -27,18 +52,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.api.RegisterRequest
+import com.example.delta3d.api.RetrofitClient
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.session.SessionViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // --- 登录页面 ---
 @Composable
@@ -50,7 +74,7 @@ fun LoginScreen(
     // 状态管理
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) } // 加载状态
+    var isLoading by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -59,7 +83,7 @@ fun LoginScreen(
 
     // 全局背景容器
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedGradientBackground() // 你的极光背景
+        AnimatedGradientBackground()
 
         Column(
             modifier = Modifier
@@ -124,10 +148,9 @@ fun LoginScreen(
                     scope.launch {
                         isLoading = true
                         try {
-                            // 调用后端 API
                             val response = RetrofitClient.api.login(username, password)
 
-                            // LoginScreen 里 scope.launch 成功后：
+                            // 成功后：
                             sessionVm.login(response.accessToken)
                             println("Login Token: ${response.accessToken}")
                             feedbackState.showSuccess("Welcome back, $username!")
@@ -138,13 +161,18 @@ fun LoginScreen(
                             onLoginSuccess()
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            feedbackState.showError("Login failed: incorrect username or password")
+                            val errorMessage = when (e) {
+                                is retrofit2.HttpException -> "Login failed: Incorrect username or password" // HTTP 4xx/5xx
+                                is java.io.IOException -> "Network connection failed. Please check your server or network" // Cannot connect to server
+                                else -> "An unknown error occurred"
+                            }
+                            feedbackState.showError(errorMessage)
                         } finally {
                             isLoading = false
                         }
                     }
                 },
-                enabled = !isLoading, // 加载中禁止点击
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

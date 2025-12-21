@@ -7,10 +7,11 @@ data class ChatMessage(
     val id: Int,
     @SerializedName("sender_id") val senderId: Int,
     @SerializedName("receiver_id") val receiverId: Int,
-    val content: String,
+    val content: String?,
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("is_read") val isRead: Boolean
 ) {
+    fun getSafeContent(): String = content ?: ""
     fun isMe(myUserId: Int): Boolean = (senderId == myUserId)
 }
 

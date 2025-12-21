@@ -500,11 +500,15 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
     LaunchedEffect(Unit) { show = true }
 
     val height = remember { item.height.dp }
-    val fullImageUrl = remember(item.coverUrl) {
-        item.coverUrl?.let { url ->
-            val base = RetrofitClient.BASE_URL.removeSuffix("/")
-            val path = url.removePrefix("/").removeSuffix("/")
-            "$base/$path/images/0001.jpg"
+    val fullImageUrl = remember(item.coverUrl, item.status) {
+        val base = RetrofitClient.BASE_URL.removeSuffix("/")
+        if (item.status == "failed" || item.status == "error") {
+            "$base/static/states/error.png"
+        } else {
+            item.coverUrl?.let { url ->
+                val path = url.removePrefix("/").removeSuffix("/")
+                "$base/$path/images/0001.jpg"
+            }
         }
     }
 

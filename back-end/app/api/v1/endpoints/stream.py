@@ -87,7 +87,7 @@ def start_stream(
         snapshot_path=str(snapshot_path)
     )
 
-    host = request.url.hostname  # 推荐
+    host = request.url.hostname
     # host = request.headers.get("host", "").split(":")[0]
 
     rtsp_url = f"rtsp://{host}:8555/live"

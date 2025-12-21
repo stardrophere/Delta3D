@@ -66,12 +66,11 @@ fun ChatScreen(
     val user by sessionVm.currentUser.collectAsState()
     val token by sessionVm.token.collectAsState()
 
-    // 初始化 ViewModel
     val viewModel: ChatViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ChatViewModel(
-                    socketManager = ChatSocketManager, // 传入单例对象
+                    socketManager = ChatSocketManager,
                     myUserId = user?.id ?: 0,
                     targetUserId = targetUserId,
                     token = token ?: ""
@@ -87,58 +86,50 @@ fun ChatScreen(
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
     val targetAvatar by viewModel.targetAvatarUrl.collectAsState()
 
+    // 数据反转
+    val uniqueMessages = remember(messages) { messages.distinctBy { it.id } }
+    val reversedMessages = remember(uniqueMessages) { uniqueMessages.reversed() }
+
     val listState = rememberLazyListState()
 
-    // 标记是否已经完成了初始化的“瞬间到底”
-    var hasInitialScrolled by remember { mutableStateOf(false) }
+    // 自动滚动逻辑
+    LaunchedEffect(reversedMessages.firstOrNull()?.id) {
+        if (reversedMessages.isNotEmpty()) {
 
-
-    // 处理初始加载：历史记录加载出来后，瞬间跳到底部
-    LaunchedEffect(messages.size) {
-        // 只有在消息列表非空，且从未执行过初始滚动时触发
-        if (messages.isNotEmpty() && !hasInitialScrolled) {
-            listState.scrollToItem(messages.size - 1)
-            hasInitialScrolled = true
-        }
-    }
-
-    // 处理新消息：平滑滚动
-    // 只有在“初始滚动”已经完成后，收到新消息才做动画
-    LaunchedEffect(messages.lastOrNull()?.id) {
-        if (messages.isNotEmpty() && hasInitialScrolled) {
-            // 智能滚动判断：
-            val isAtBottom = !listState.canScrollForward
-            val lastMsg = messages.last()
+            val isAtBottom = listState.firstVisibleItemIndex < 2
+            val lastMsg = reversedMessages.first()
             val isMe = lastMsg.isMe(user?.id ?: 0)
 
+            // 如果是我发的，或者用户当前就在底部，则滚动显示最新消息
             if (isMe || isAtBottom) {
-                listState.animateScrollToItem(messages.size - 1)
+                listState.animateScrollToItem(0)
             }
         }
     }
 
+    // 加载更多历史记录逻辑
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
 
-    // 只有当“初始滚动”完成后，才允许触发加载更多，防止刚进页面就触发加载
-    val isAtTop by remember {
-        derivedStateOf {
-            val firstIndex = listState.firstVisibleItemIndex
-            val firstOffset = listState.firstVisibleItemScrollOffset
-            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && messages.isNotEmpty()
-        }
-    }
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
-    LaunchedEffect(isAtTop) {
-        if (isAtTop) {
-            viewModel.loadMoreHistory()
+
+            (lastVisibleItemIndex >= totalItems - 3) to (totalItems > 0)
         }
+            .collect { (shouldLoad, hasItems) ->
+                if (shouldLoad && hasItems) {
+                    viewModel.loadMoreHistory()
+                }
+            }
     }
 
     // 进入页面时标记已读
     LaunchedEffect(Unit) {
         token?.let { rawToken ->
             try {
-                val authHeader =
-                    if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
+                val authHeader = if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
                 RetrofitClient.api.markAsRead(authHeader, targetUserId)
                 sessionVm.refreshUnreadCount()
             } catch (e: Exception) {
@@ -173,37 +164,23 @@ fun ChatScreen(
         ) { innerPadding ->
             LazyColumn(
                 state = listState,
+                reverseLayout = true, // 核心开启反转布局
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
+
                     top = 20.dp,
+
                     bottom = 100.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // 顶部加载指示器
-                if (isLoadingHistory) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = AccentColor.copy(alpha = 0.7f),
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    }
-                }
-
+                // 消息列表
                 items(
-                    items = messages,
+                    items = reversedMessages,
                     key = { it.id }
                 ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
@@ -215,6 +192,24 @@ fun ChatScreen(
                             onNavigateToPost(postId)
                         }
                     )
+                }
+
+                // 加载指示器
+                if (isLoadingHistory) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AccentColor.copy(alpha = 0.7f),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -254,9 +249,10 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
             horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            if (ShareLinkUtils.isPostShareLink(msg.content)) {
+            if (ShareLinkUtils.isPostShareLink(msg.getSafeContent())) {
                 // 解析数据
-                val shareData = remember(msg.content) { ShareLinkUtils.parsePostLink(msg.content) }
+                val shareData =
+                    remember(msg.content) { ShareLinkUtils.parsePostLink(msg.getSafeContent()) }
 
                 if (shareData != null) {
                     PostShareCard(
@@ -266,11 +262,11 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
                     )
                 } else {
                     // 解析失败兜底显示文本
-                    BubbleContent(msg.content, isMe)
+                    BubbleContent(msg.getSafeContent(), isMe)
                 }
             } else {
                 // 普通文本
-                BubbleContent(msg.content, isMe)
+                BubbleContent(msg.getSafeContent(), isMe)
             }
 
             // 时间显示 ---
