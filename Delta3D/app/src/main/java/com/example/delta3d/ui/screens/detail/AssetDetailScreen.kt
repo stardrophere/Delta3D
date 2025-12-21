@@ -284,7 +284,7 @@ fun AssetDetailScreen(
                         onDismiss = { showDownloadDialog = false },
                         onDownload = { format ->
                             showDownloadDialog = false
-                            // 触发 ViewModel 的下载逻辑
+                            // 下载逻辑
                             token?.let {
                                 detailVm.downloadAsset(it, assetId, format)
                             }
@@ -296,7 +296,7 @@ fun AssetDetailScreen(
 
                 if (showShareDialog) {
                     ShareActionDialog(
-                        title = "Share Asset",
+                        title = "Share Model",
                         link = "Wait for implementation...",
                         onDismiss = { showShareDialog = false },
                         onCopyLink = {
@@ -1057,7 +1057,7 @@ fun DownloadFormatDialog(
         ) {
             Column {
                 Text(
-                    "Download Assets",
+                    "Download Model",
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold

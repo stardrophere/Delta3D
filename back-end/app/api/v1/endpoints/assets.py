@@ -30,6 +30,10 @@ def read_my_assets(
     获取【我的模型库】列表
     对应设计图中的网格展示
     """
+    # raise HTTPException(
+    #     status_code=401,
+    #     detail="Testing Token Expiration"
+    # )
     assets = crud_asset.get_my_assets(session=session, user_id=current_user.id)
     return assets
 
@@ -46,7 +50,7 @@ def upload_asset(
         session: Session = Depends(get_session),
         current_user: User = Depends(get_current_user)
 ):
-    upload_root = Path(settings.UPLOAD_DIR)  # 例如 ./static/uploads
+    upload_root = Path(settings.UPLOAD_DIR)
     upload_root.mkdir(parents=True, exist_ok=True)
 
     # 每个资产一个独立目录
@@ -75,7 +79,7 @@ def upload_asset(
 
     # web 路径
     web_asset_base = f"/static/uploads/{asset_uid}"
-    video_disk_path = str(video_disk_path)  # 真实磁盘路径
+    video_disk_path = str(video_disk_path)
     snapshot_disk_path = str((asset_dir / "model.msgpack"))
     web_model_path = snapshot_disk_path
 
@@ -102,7 +106,6 @@ def upload_asset(
         web_model_path
     )
 
-    # 返回：cover_url
     return AssetCard(
         id=new_asset.id,
         title=new_asset.title,
@@ -138,7 +141,7 @@ def read_asset_detail(
     if asset.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权访问该资产")
 
-    # 4. 返回数据
+    # 返回数据
     return AssetDetail(
         id=asset.id,
         title=asset.title,
@@ -290,7 +293,7 @@ def update_asset(
     )
 
 
-# 举报/反馈接口 (写入本地文件)
+# 举报/反馈接口
 @router.post("/{asset_id}/report")
 def report_issue(
         asset_id: int,

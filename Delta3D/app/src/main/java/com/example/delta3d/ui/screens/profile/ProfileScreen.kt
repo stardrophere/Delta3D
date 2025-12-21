@@ -413,7 +413,7 @@ fun ProfileScreen(
         if (showLogoutDialog) {
             AlertDialog(
                 onDismissRequest = { showLogoutDialog = false },
-                containerColor = Color(0xFF1E1E1E), // 深色背景
+                containerColor = Color(0xFF1E1E1E),
                 title = {
                     Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
                 },
@@ -427,7 +427,7 @@ fun ProfileScreen(
 
                             scope.launch {
                                 feedbackState.showSuccess("Logged out successfully")
-                                delay(600)
+//                                delay(600)
                                 sessionVm.logout()
                             }
                         }
