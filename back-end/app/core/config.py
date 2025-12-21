@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./static/uploads"
     DOMAIN: str = "http://127.0.0.1:8000"
 
+    # 扩展配置
+    NGP_PYTHON_PATH: str | None = None
+    COLMAP2NERF_SCRIPT_PATH: str | None = None
+    NGP_RUN_SCRIPT_PATH: str | None = None
+    RTSP_URL: str | None = None
+
     # =========================================================
     # 配置项
     # =========================================================

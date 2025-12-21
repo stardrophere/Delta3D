@@ -1,15 +1,23 @@
+import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 from app.process_manager.utils import run_and_stream, NonBlockingCommandRunner
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ENV_NGP_PYTHON = os.getenv("NGP_PYTHON_PATH")
+ENV_COLMAP2NERF = os.getenv("COLMAP2NERF_SCRIPT_PATH")
+ENV_NGP_RUN = os.getenv("NGP_RUN_SCRIPT_PATH")
 
 
 def train_ngp_from_video(
         video_path: str,
         snapshot_path: str,
         *,
-        venv_python: str = r"D:\ProgramData\miniconda3\envs\instantNGP\python.exe",
-        colmap2nerf_script: str = r"E:\ScnuProject\Verification\scripts\colmap2nerf.py",
-        ngp_run_script: str = r"D:\InstantNgp\instant-ngp\scripts\run.py",
+        venv_python: Optional[str] = None,
+        colmap2nerf_script: Optional[str] = None,
+        ngp_run_script: Optional[str] = None,
         video_fps: int = 5,
         n_steps: int = 5000,
         colmap_camera_model: str = "SIMPLE_RADIAL",
@@ -30,6 +38,18 @@ def train_ngp_from_video(
     失败时：
       - 抛出 RuntimeError / FileNotFoundError
     """
+
+    venv_python = venv_python or ENV_NGP_PYTHON
+    colmap2nerf_script = colmap2nerf_script or ENV_COLMAP2NERF
+    ngp_run_script = ngp_run_script or ENV_NGP_RUN
+
+    # 完整性检查
+    if not venv_python:
+        raise ValueError("未配置 Python 路径: 请在 .env 设置 NGP_PYTHON_PATH 或在调用时传入")
+    if not colmap2nerf_script:
+        raise ValueError("未配置 colmap2nerf 路径: 请在 .env 设置 COLMAP2NERF_SCRIPT_PATH")
+    if not ngp_run_script:
+        raise ValueError("未配置 run.py 路径: 请在 .env 设置 NGP_RUN_SCRIPT_PATH")
     video_path = Path(video_path).resolve()
 
     video_dir = str(video_path.parent)

@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import sys
@@ -7,6 +8,9 @@ import shutil
 
 from app.window_controller.continuous import ContinuousController
 from app.process_manager.utils import ExternalCommandRunner
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class InteractiveStreamSession:
@@ -25,7 +29,7 @@ class InteractiveStreamSession:
 
         # 状态记录
         self.current_asset_id: int | None = None
-        self.rtsp_url: str = "rtsp://127.0.0.1:8555/live"
+        self.rtsp_url: str = os.getenv("RTSP_URL")
 
     def start(self, asset_id: int, scene_path: str, snapshot_path: str):
         """启动推流会话（如果已有会话则先停止）"""
@@ -116,8 +120,8 @@ class InteractiveStreamSession:
             )
 
     def _run_processes(self, scene_path: str, snapshot_path: str):
-        venv_python = r"D:\ProgramData\miniconda3\envs\instantNGP\python.exe"
-        ngp_script = r"D:\InstantNgp\instant-ngp\scripts\run.py"
+        venv_python = os.getenv("NGP_PYTHON_PATH")
+        ngp_script = os.getenv("NGP_RUN_SCRIPT_PATH")
         window_title = "Instant Neural Graphics Primitives"
 
         # 保险：确认 ffmpeg 在 PATH 里
