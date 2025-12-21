@@ -10,14 +10,14 @@ from app.models import Message, User
 from app.schemas import MessageOut, MessageCreate, ChatConversation
 from app.core.socket_manager import manager
 
-# 如果你有获取当前用户的依赖，可以导入用来做鉴权
+
 # from app.api.deps import get_current_user
 
 router = APIRouter()
 
 
 # ============================
-# 1. WebSocket 实时聊天
+# WebSocket 实时聊天
 # ============================
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(
@@ -31,7 +31,7 @@ async def websocket_endpoint(
     await manager.connect(user_id, websocket)
     try:
         while True:
-            # 1. 接收消息 (JSON 格式: {"receiver_id": 2, "content": "你好"})
+            # 接收消息 (JSON 格式: {"receiver_id": 2, "content": "你好"})
             data = await websocket.receive_text()
             msg_data = json.loads(data)
 
@@ -41,7 +41,7 @@ async def websocket_endpoint(
             if not receiver_id or not content:
                 continue
 
-            # 2. 存入数据库
+            # 存入数据库
             new_msg = Message(
                 sender_id=user_id,
                 receiver_id=receiver_id,
@@ -53,7 +53,7 @@ async def websocket_endpoint(
             session.commit()
             session.refresh(new_msg)
 
-            # 3. 构造推送数据
+            # 构造推送数据
             response_json = json.dumps({
                 "type": "new_message",
                 "data": {
@@ -65,10 +65,10 @@ async def websocket_endpoint(
                 }
             })
 
-            # 4. 推送给接收者
+            # 推送给接收者
             await manager.send_personal_message(response_json, receiver_id)
 
-            # 5. 回显给自己
+            # 回显给自己
             await manager.send_personal_message(response_json, user_id)
 
     except WebSocketDisconnect:
@@ -183,7 +183,7 @@ def mark_messages_as_read(
     """
     将 other_user_id 发给我的所有消息标记为已读
     """
-    # 1. 查出所有未读消息
+    # 查出所有未读消息
     statement = select(Message).where(
         Message.sender_id == other_user_id,
         Message.receiver_id == current_user.id,
@@ -191,7 +191,7 @@ def mark_messages_as_read(
     )
     messages = session.exec(statement).all()
 
-    # 2. 批量更新
+    # 批量更新
     for msg in messages:
         msg.is_read = True
         session.add(msg)
@@ -217,7 +217,7 @@ async def send_message_http(
     2. 如果对方在线，通过 WebSocket 实时推送
     """
 
-    # 1. 写入数据库
+    # 写入数据库
     new_msg = Message(
         sender_id=current_user.id,
         receiver_id=msg_in.receiver_id,

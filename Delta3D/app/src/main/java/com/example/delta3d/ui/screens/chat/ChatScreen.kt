@@ -66,12 +66,11 @@ fun ChatScreen(
     val user by sessionVm.currentUser.collectAsState()
     val token by sessionVm.token.collectAsState()
 
-
     val viewModel: ChatViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ChatViewModel(
-                    socketManager = ChatSocketManager, // socket
+                    socketManager = ChatSocketManager,
                     myUserId = user?.id ?: 0,
                     targetUserId = targetUserId,
                     token = token ?: ""
@@ -87,66 +86,50 @@ fun ChatScreen(
     val myAvatar by viewModel.myAvatarUrl.collectAsState()
     val targetAvatar by viewModel.targetAvatarUrl.collectAsState()
 
-    // 提前去重
-    val uniqueMessages = remember(messages) {
-        messages.distinctBy { it.id }
-    }
+    // 数据反转
+    val uniqueMessages = remember(messages) { messages.distinctBy { it.id } }
+    val reversedMessages = remember(uniqueMessages) { uniqueMessages.reversed() }
 
     val listState = rememberLazyListState()
 
+    // 自动滚动逻辑
+    LaunchedEffect(reversedMessages.firstOrNull()?.id) {
+        if (reversedMessages.isNotEmpty()) {
 
-    var hasInitialScrolled by remember { mutableStateOf(false) }
+            val isAtBottom = listState.firstVisibleItemIndex < 2
+            val lastMsg = reversedMessages.first()
+            val isMe = lastMsg.isMe(user?.id ?: 0)
 
-
-    LaunchedEffect(uniqueMessages) {
-        if (uniqueMessages.isNotEmpty()) {
-            val headerOffset = if (isLoadingHistory) 1 else 0
-            val lastIndex = uniqueMessages.size + headerOffset - 1
-
-            // 确保索引有效
-            if (lastIndex >= 0) {
-                if (!hasInitialScrolled) {
-                    listState.scrollToItem(lastIndex)
-                    hasInitialScrolled = true
-                } else {
-                    val isAtBottom = !listState.canScrollForward
-                    val lastMsg = uniqueMessages.last()
-                    val isMe = lastMsg.isMe(user?.id ?: 0)
-
-                    if (isMe || isAtBottom) {
-                        try {
-                            listState.animateScrollToItem(lastIndex)
-                        } catch (e: Exception) {
-                            listState.scrollToItem(lastIndex)
-                        }
-                    }
-                }
+            // 如果是我发的，或者用户当前就在底部，则滚动显示最新消息
+            if (isMe || isAtBottom) {
+                listState.animateScrollToItem(0)
             }
         }
     }
 
-    // 只有当“初始滚动”完成后，才允许触发加载更多，防止刚进页面就触发加载
-    val isAtTop by remember {
-        derivedStateOf {
-            val firstIndex = listState.firstVisibleItemIndex
-            val firstOffset = listState.firstVisibleItemScrollOffset
-            // 这里用 uniqueMessages 判断非空更稳妥
-            hasInitialScrolled && firstIndex == 0 && firstOffset == 0 && uniqueMessages.isNotEmpty()
-        }
-    }
+    // 加载更多历史记录逻辑
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
 
-    LaunchedEffect(isAtTop) {
-        if (isAtTop) {
-            viewModel.loadMoreHistory()
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+
+
+            (lastVisibleItemIndex >= totalItems - 3) to (totalItems > 0)
         }
+            .collect { (shouldLoad, hasItems) ->
+                if (shouldLoad && hasItems) {
+                    viewModel.loadMoreHistory()
+                }
+            }
     }
 
     // 进入页面时标记已读
     LaunchedEffect(Unit) {
         token?.let { rawToken ->
             try {
-                val authHeader =
-                    if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
+                val authHeader = if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
                 RetrofitClient.api.markAsRead(authHeader, targetUserId)
                 sessionVm.refreshUnreadCount()
             } catch (e: Exception) {
@@ -181,37 +164,23 @@ fun ChatScreen(
         ) { innerPadding ->
             LazyColumn(
                 state = listState,
+                reverseLayout = true, // 核心开启反转布局
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
+
                     top = 20.dp,
+
                     bottom = 100.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // 顶部加载指示器
-                if (isLoadingHistory) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = AccentColor.copy(alpha = 0.7f),
-                                strokeWidth = 2.dp
-                            )
-                        }
-                    }
-                }
-
+                // 消息列表
                 items(
-                    items = uniqueMessages, // 去重列表
+                    items = reversedMessages,
                     key = { it.id }
                 ) { msg ->
                     val isMe = msg.isMe(user?.id ?: 0)
@@ -223,6 +192,24 @@ fun ChatScreen(
                             onNavigateToPost(postId)
                         }
                     )
+                }
+
+                // 加载指示器
+                if (isLoadingHistory) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AccentColor.copy(alpha = 0.7f),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
                 }
             }
         }

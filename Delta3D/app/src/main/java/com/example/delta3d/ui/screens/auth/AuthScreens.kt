@@ -150,7 +150,7 @@ fun LoginScreen(
                         try {
                             val response = RetrofitClient.api.login(username, password)
 
-                            // LoginScreen 里 scope.launch 成功后：
+                            // 成功后：
                             sessionVm.login(response.accessToken)
                             println("Login Token: ${response.accessToken}")
                             feedbackState.showSuccess("Welcome back, $username!")
@@ -161,7 +161,12 @@ fun LoginScreen(
                             onLoginSuccess()
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            feedbackState.showError("Login failed: incorrect username or password")
+                            val errorMessage = when (e) {
+                                is retrofit2.HttpException -> "Login failed: Incorrect username or password" // HTTP 4xx/5xx
+                                is java.io.IOException -> "Network connection failed. Please check your server or network" // Cannot connect to server
+                                else -> "An unknown error occurred"
+                            }
+                            feedbackState.showError(errorMessage)
                         } finally {
                             isLoading = false
                         }
