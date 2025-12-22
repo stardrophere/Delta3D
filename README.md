@@ -106,7 +106,8 @@ python run.py
 1. 打开 **Android Studio**。
 2. 选择 **Open an existing Android Studio project**。
 3. 导航并选择 `Delta3D/` 目录。
-4. 等待 Gradle Sync 完成后，连接真机或模拟器点击 **Run**。
+4. 请注意需要在 `com.example.delta3d.api` 中修改 `RetrofitClient.kt` 文件中的 **BASE_URL** 换成你自己的服务器IP地址
+5. 等待 Gradle Sync 完成后，连接真机或模拟器点击 **Run**。
 
 ---
 
