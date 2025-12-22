@@ -59,6 +59,8 @@ fun ProfileScreen(
     onNavigateToSavedPosts: () -> Unit,
     onNavigateToDownloads: () -> Unit,
     onNavigateToPlanSettings: () -> Unit,
+    onNavigateToTree: () -> Unit,
+    onNavigateToLogo: () -> Unit,
     viewModel: ProfileViewModel = viewModel()
 ) {
     val currentUser by sessionVm.currentUser.collectAsState()
@@ -66,7 +68,7 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
 
-    // 协程作用域，用于处理延时和异步操作
+    // 处理延时和异步操作
     val scope = rememberCoroutineScope()
 
     val feedbackState = rememberFeedbackState()
@@ -361,7 +363,40 @@ fun ProfileScreen(
                             "Downloaded models"
                         ) { onNavigateToDownloads() }
 
+                        FunctionCard(
+                            Icons.Rounded.Download,
+                            "Download History",
+                            "Downloaded models"
+                        ) { onNavigateToDownloads() }
+
                         Spacer(Modifier.height(8.dp))
+
+                        // EXPERIENC
+                        Text(
+                            "EXPERIENCE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentColor,
+                            fontSize = 10.sp
+                        )
+
+                        FunctionCard(
+                            icon = Icons.Rounded.Spa,
+                            title = "Delta Tree",
+                            subtitle = "Replay growth simulation",
+                            color = Color(0xFF81C784)
+                        ) { onNavigateToTree() }
+
+                        FunctionCard(
+                            icon = Icons.Rounded.Animation,
+                            title = "Logo Reveal",
+                            subtitle = "Replay brand animation",
+                            color = Color(0xFF64B5F6)
+                        ) { onNavigateToLogo() }
+
+
+                        Spacer(Modifier.height(8.dp))
+
+
 
                         Text(
                             "ACCOUNT",

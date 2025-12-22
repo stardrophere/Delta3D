@@ -217,7 +217,7 @@ fun RegisterScreen(
     val feedbackState = rememberFeedbackState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedGradientBackground() // 复用背景
+        AnimatedGradientBackground() // 背景
 
         Column(
             modifier = Modifier

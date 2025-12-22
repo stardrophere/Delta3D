@@ -79,7 +79,7 @@ async def websocket_endpoint(
 
 
 # ============================
-# 2. HTTP 获取历史记录
+# HTTP 获取历史记录
 # ============================
 @router.get("/history/{other_user_id}", response_model=List[MessageOut])
 def get_chat_history(
@@ -132,7 +132,7 @@ def get_conversations(
             seen.add(other_id)
             contact_ids.append(other_id)
 
-    # 3. 组装结果列表
+    # 组装结果列表
     conversations = []
     for contact_id in contact_ids:
         # 3.1 获取对方用户信息

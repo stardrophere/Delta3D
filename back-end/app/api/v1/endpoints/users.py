@@ -124,14 +124,13 @@ def get_user_avatar(
     """
     通过用户 ID 获取其头像 URL
     """
-    # 1. 直接从数据库获取用户对象
     user = session.get(User, user_id)
 
-    # 2. 校验用户是否存在
+    # 校验用户是否存在
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 3. 返回头像 URL
+    # 返回头像 URL
     return UserAvatar(avatar_url=user.avatar_url)
 
 
@@ -147,7 +146,7 @@ def get_user_followers(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 利用 SQLModel 的 Relationship 自动查询
+    # Relationship 自动查询
     return user.followers
 
 
@@ -237,7 +236,6 @@ def update_user_me(
     try:
         updated_user = crud_user.update_profile(session, current_user.id, user_in)
     except Exception as e:
-        # 捕获可能的枚举错误或其他数据库错误
         raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
 
     # 返回最新信息

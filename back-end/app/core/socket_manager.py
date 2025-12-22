@@ -23,5 +23,5 @@ class ConnectionManager:
             await websocket.send_text(message)
 
 
-# 实例化一个全局对象
+# 全局对象
 manager = ConnectionManager()

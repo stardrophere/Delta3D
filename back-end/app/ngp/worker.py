@@ -9,7 +9,7 @@ def task_train_asset(asset_id: int, video_disk_path: str, snapshot_disk_path: st
     """
 
     with Session(engine) as session:
-        # 获取资产对象
+        # 获取model对象
         asset = session.get(ModelAsset, asset_id)
         if not asset:
             return
@@ -42,6 +42,6 @@ def task_train_asset(asset_id: int, video_disk_path: str, snapshot_disk_path: st
             # asset.remark = f"{asset.remark or ''} | Error: {str(e)}"
 
         finally:
-            # 最终提交数据库修改
+            # 提交数据库修改
             session.add(asset)
             session.commit()

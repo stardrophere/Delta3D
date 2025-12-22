@@ -18,13 +18,14 @@ import com.example.delta3d.ui.screens.home.HomeScreen
 import com.example.delta3d.ui.screens.auth.LoginScreen
 import com.example.delta3d.ui.screens.auth.RegisterScreen
 import androidx.compose.runtime.collectAsState
-import com.example.delta3d.manager.ChatSocketManager
+import com.example.delta3d.ui.screens.onboarding.DeltaTreeScreen
 import com.example.delta3d.ui.screens.chat.ChatListScreen
 import com.example.delta3d.ui.screens.chat.ChatScreen
 import com.example.delta3d.ui.screens.community.CommunityScreen
 import com.example.delta3d.ui.session.SessionViewModel
 import com.example.delta3d.ui.screens.detail.AssetDetailScreen
 import com.example.delta3d.ui.screens.detail.PostDetailScreen
+import com.example.delta3d.ui.screens.onboarding.Delta3DLogoSplash
 import com.example.delta3d.ui.screens.preview.StreamPreviewScreen
 import com.example.delta3d.ui.screens.profile.DownloadHistoryScreen
 import com.example.delta3d.ui.screens.profile.PlanSettingsScreen
@@ -40,10 +41,21 @@ import java.nio.charset.StandardCharsets
 //val chatSocketManager = ChatSocketManager()
 
 @Composable
-fun AppNavigation(sessionVm: SessionViewModel) {
+fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
     val navController = rememberNavController()
     val token by sessionVm.token.collectAsState()
     val loaded by sessionVm.loaded.collectAsState()
+
+    //起始页
+    val startDestination = if (!loaded) {
+        "empty"
+    } else if (isFirstLaunch) {
+        "delta_tree"
+    } else if (token.isNullOrBlank()) {
+        "login"
+    } else {
+        "home"
+    }
 
 
     val start = if (token.isNullOrBlank()) "login" else "home"
@@ -59,7 +71,8 @@ fun AppNavigation(sessionVm: SessionViewModel) {
     LaunchedEffect(token) {
         if (token.isNullOrBlank()) {
             val current = navController.currentBackStackEntry?.destination?.route
-            if (current != "login" && current != null) {
+            // 不在引导流程则登录
+            if (current != "login" && current != "delta_tree" && current != "logo" && current != null) {
                 navController.navigate("login") {
                     popUpTo(0) { inclusive = true }
                     launchSingleTop = true
@@ -88,9 +101,65 @@ fun AppNavigation(sessionVm: SessionViewModel) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = start,
+            startDestination = startDestination,
             modifier = Modifier
         ) {
+
+            //树页
+            composable(
+                route = "delta_tree?isReplay={isReplay}",
+                arguments = listOf(
+                    navArgument("isReplay") {
+                        defaultValue = false
+                        type = NavType.BoolType
+                    }
+                )
+            ) { backStackEntry ->
+                val isReplay = backStackEntry.arguments?.getBoolean("isReplay") ?: false
+
+                DeltaTreeScreen(
+                    onDismiss = {
+                        if (isReplay) {
+                            //回看直接返回
+                            navController.popBackStack()
+                        } else {
+                            // 首次启动
+                            navController.navigate("logo") {
+                                popUpTo("delta_tree") { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
+            // Logo 页
+            composable(
+                route = "logo?isReplay={isReplay}",
+                arguments = listOf(
+                    navArgument("isReplay") {
+                        defaultValue = false
+                        type = NavType.BoolType
+                    }
+                )
+            ) { backStackEntry ->
+                val isReplay = backStackEntry.arguments?.getBoolean("isReplay") ?: false
+
+                Delta3DLogoSplash(
+                    onAnimationComplete = {
+                        if (isReplay) {
+                            // 如回看直接返回
+                            navController.popBackStack()
+                        } else {
+                            // 首次启动标记完成并去登录页
+                            sessionVm.completeOnboarding()
+                            navController.navigate("login") {
+                                popUpTo("logo") { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
             //  登录/注册/详情页
             composable("login") {
                 LoginScreen(
@@ -122,7 +191,7 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     onBack = { navController.popBackStack() },
                     sessionVm = sessionVm,
                     onPreviewClick = {
-                        Log.d("TRACK_ID", "1. [Detail->Preview] 跳转 ID: $currentId") // 加个日志双重保险
+                        Log.d("TRACK_ID", "[Detail->Preview] 跳转 ID: $currentId")
                         navController.navigate("preview/$currentId")
                     },
                     onNavigateToPublish = { targetAssetId ->
@@ -273,11 +342,11 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     }
                 )
             }
+
             composable("profile") {
                 ProfileScreen(
                     sessionVm = sessionVm,
                     onNavigateToUserList = { type ->
-                        // 获取当前用户ID并跳转
                         val userId = sessionVm.currentUser.value?.id ?: 0
                         navController.navigate("profile/list/$userId/$type")
                     },
@@ -292,6 +361,13 @@ fun AppNavigation(sessionVm: SessionViewModel) {
                     },
                     onNavigateToPlanSettings = {
                         navController.navigate("profile/plan")
+                    },
+                    // 启动页
+                    onNavigateToTree = {
+                        navController.navigate("delta_tree?isReplay=true")
+                    },
+                    onNavigateToLogo = {
+                        navController.navigate("logo?isReplay=true")
                     }
                 )
             }

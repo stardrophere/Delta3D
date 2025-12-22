@@ -11,7 +11,7 @@ from app.database import get_session
 from app.models import User
 from app.core.config import settings
 
-# 指明 Token 获取地址 (Swagger UI 用)
+# 指明 Token 获取地址
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
 
 

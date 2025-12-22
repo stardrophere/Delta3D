@@ -1,8 +1,6 @@
 import os
 import threading
 import time
-import sys
-from pathlib import Path
 from typing import Optional
 import shutil
 
@@ -40,7 +38,7 @@ class InteractiveStreamSession:
         self.stop_event.clear()
         self.is_running = True
 
-        # 在后台线程启动 NGP 和 FFMPEG，防止阻塞 API
+        # 在后台线程启动 NGP 和 FFMPEG
         self.process_thread = threading.Thread(
             target=self._run_processes,
             args=(scene_path, snapshot_path),
@@ -79,8 +77,8 @@ class InteractiveStreamSession:
             return
 
         # 开始
-        # --- 速度配置参数 ---
-        # 旋转: 距离越大越快，时间越短越丝滑
+        # 速度配置参数
+        #旋转
         ROTATE_DIST = 15
         ROTATE_TIME = 0.05
 
@@ -124,7 +122,7 @@ class InteractiveStreamSession:
         ngp_script = os.getenv("NGP_RUN_SCRIPT_PATH")
         window_title = "Instant Neural Graphics Primitives"
 
-        # 保险：确认 ffmpeg 在 PATH 里
+        # 确认 ffmpeg 在 PATH 里
         ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
 
         ngp_cmd = [

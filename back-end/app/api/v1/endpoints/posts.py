@@ -89,24 +89,24 @@ def publish_post(
     5. 创建帖子并返回 PostCard
     """
 
-    # --- 1. 获取资产信息 ---
+    # 获取model信息
     asset = session.get(ModelAsset, post_in.asset_id)
 
-    # 校验 A: 资产不存在
+    # model不存在
     if not asset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="找不到指定的模型资产"
         )
 
-    # 校验 B: 资产不属于你
+    # model不属于你
     if asset.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="你无法发布不属于你的模型"
         )
 
-    # 校验 C: 资产未就绪 (重要!)
+    # mdoel未就绪
     # 如果模型还在生成中(PROCESSING)或失败(FAILED)，不能发布
     if asset.status != AssetStatus.COMPLETED:
         raise HTTPException(
@@ -114,8 +114,7 @@ def publish_post(
             detail=f"模型状态为 {asset.status}，无法发布。请等待模型生成完成。"
         )
 
-    # 校验 D: 防重复发布
-    # 如果你希望一个模型只能发一次帖子，开启此校验
+    # 防重复发布
     existing_post = crud_post.get_post_by_asset_id(session, asset.id)
     if existing_post:
         raise HTTPException(
@@ -123,11 +122,10 @@ def publish_post(
             detail="该模型已经发布过帖子，请勿重复发布"
         )
 
-    # --- 2. 创建帖子 ---
+    # 创建帖子
     new_post = crud_post.create_post(session, current_user.id, post_in)
 
-    # --- 3. 组装返回数据 (PostCard) ---
-    # 因为刚发布的帖子，点赞/收藏/评论数肯定都是0，直接手动构造比查库更快
+    # 组装返回数据
     return PostCard(
         post_id=new_post.id,
         asset_id=asset.id,
@@ -148,7 +146,7 @@ def publish_post(
         owner_name=current_user.username,
         owner_avatar=current_user.avatar_url,
 
-        # 交互状态 (刚发，肯定都是False，除非你要自动给自己的帖子点赞)
+        # 交互状态
         is_liked=False,
         is_collected=False,
         has_commented=False,
@@ -156,10 +154,7 @@ def publish_post(
     )
 
 
-# 导入
-
-
-# --- 点赞帖子 ---
+# 点赞帖子
 @router.post("/{post_id}/like", response_model=ToggleResponse)
 def like_post(
         post_id: int,
@@ -171,7 +166,7 @@ def like_post(
     - 如果当前未赞，则点赞（返回 is_active=True）
     - 如果当前已赞，则取消（返回 is_active=False）
     """
-    # 0. 先简单检查帖子是否存在 (可选，CRUD里也有检查，但这里报错更明确)
+    # 先简单检查帖子是否存在
     post = session.get(CommunityPost, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
@@ -206,7 +201,7 @@ def collect_post(
     )
 
 
-# --- 评论帖子 ---
+# 评论帖子
 @router.post("/{post_id}/comments", response_model=CommentOut)
 def comment_post(
         post_id: int,

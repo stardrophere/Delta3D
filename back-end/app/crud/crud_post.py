@@ -1,15 +1,12 @@
-# app/crud/crud_post.py
-from typing import List
-from sqlmodel import Session, select
-from app.models import CommunityPost, ModelAsset, InteractionLike, User
-from app.models import (
-    CommunityPost, ModelAsset, InteractionLike,
-    PostCollection, Comment, UserFollow, User
-)
-from app.models import Visibility  #
 from app.schemas import PostCreate
 from fastapi import HTTPException
 from app.schemas import PostDetail, PostAssetInfo, CommentOut
+from sqlmodel import Session, select, or_, and_, col
+from typing import List
+from app.models import (
+    CommunityPost, ModelAsset, InteractionLike,
+    PostCollection, Comment, UserFollow, User, Visibility
+)
 
 
 def get_posts_by_user(
@@ -31,12 +28,12 @@ def get_posts_by_user(
 
     results = []
     for post in posts:
-        # 获取关联的资产信息
+        # 获取关联的model信息
         asset = post.asset
         author = post.author
 
         # 检查当前用户是否点赞
-        # 查询 InteractionLike 表，看有没有 (user_id, post_id) 的记录
+        # 查询 InteractionLike 表
         like_stat = select(InteractionLike).where(
             InteractionLike.user_id == current_user_id,
             InteractionLike.post_id == post.id
@@ -60,15 +57,9 @@ def get_posts_by_user(
     return results
 
 
-# app/crud/crud_post.py
 
 
-from sqlmodel import Session, select, or_, and_, col
-from typing import List
-from app.models import (
-    CommunityPost, ModelAsset, InteractionLike,
-    PostCollection, Comment, UserFollow, User, Visibility
-)
+
 
 
 def get_community_posts(session: Session, current_user_id: int) -> List[dict]:
@@ -112,23 +103,23 @@ def get_community_posts(session: Session, current_user_id: int) -> List[dict]:
     if not posts:
         return []
 
-    # A. 我点赞过的帖子ID
+    # 我点赞过的帖子ID
     liked_ids_stmt = select(InteractionLike.post_id).where(InteractionLike.user_id == current_user_id)
     my_liked_ids = set(session.exec(liked_ids_stmt).all())
 
-    # B. 我收藏过的帖子ID
+    # 我收藏过的帖子ID
     collected_ids_stmt = select(PostCollection.post_id).where(PostCollection.user_id == current_user_id)
     my_collected_ids = set(session.exec(collected_ids_stmt).all())
 
-    # C. 我评论过的帖子ID
+    # 我评论过的帖子ID
     commented_ids_stmt = select(Comment.post_id).where(Comment.user_id == current_user_id).distinct()
     my_commented_ids = set(session.exec(commented_ids_stmt).all())
 
-    # D. 我关注的用户ID
+    # 我关注的用户ID
     following_ids_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == current_user_id)
     my_following_ids = set(session.exec(following_ids_stmt).all())
 
-    # 3. 组装数据
+    # 组装数据
     results = []
     for post in posts:
         asset = post.asset
@@ -183,7 +174,7 @@ def create_post(session: Session, user_id: int, post_in: PostCreate) -> Communit
     return db_post
 
 
-# --- 点赞 ---
+# 点赞触发
 def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int]:
     """
     切换帖子点赞状态 (Toggle Like)
@@ -207,14 +198,14 @@ def toggle_like(session: Session, user_id: int, post_id: int) -> tuple[bool, int
     author = session.get(User, post.user_id)
 
     if like_record:
-        # --- 情况 A: 已点赞 -> 执行取消 ---
+        # 已点赞 -> 执行取消
         session.delete(like_record)
         post.like_count = max(0, post.like_count - 1)
         if author:
             author.liked_total_count = max(0, author.liked_total_count - 1)
         is_active = False
     else:
-        # --- 情况 B: 未点赞 -> 执行点赞 ---
+        # 未点赞 -> 执行点赞
         new_record = InteractionLike(user_id=user_id, post_id=post_id)
         session.add(new_record)
         post.like_count += 1
@@ -251,12 +242,12 @@ def toggle_collection(session: Session, user_id: int, post_id: int) -> tuple[boo
     collect_record = session.exec(statement).first()
 
     if collect_record:
-        # --- 取消收藏 ---
+        # 取消收藏
         session.delete(collect_record)
         post.collect_count = max(0, post.collect_count - 1)
         is_active = False
     else:
-        # --- 收藏 ---
+        # 收藏
         new_record = PostCollection(user_id=user_id, post_id=post_id)
         session.add(new_record)
         post.collect_count += 1
@@ -269,14 +260,14 @@ def toggle_collection(session: Session, user_id: int, post_id: int) -> tuple[boo
     return is_active, post.collect_count
 
 
-# --- 评论 ---
+# 评论
 def create_comment(session: Session, user_id: int, post_id: int, content: str) -> Comment:
     """发布评论"""
     post = session.get(CommunityPost, post_id)
     if not post:
         return None
 
-    # 1. 创建评论
+    # 创建评论
     comment = Comment(
         user_id=user_id,
         post_id=post_id,
@@ -285,7 +276,7 @@ def create_comment(session: Session, user_id: int, post_id: int, content: str) -
     )
     session.add(comment)
 
-    # 2. 帖子评论数 +1
+    # 帖子评论数 +1
     post.comment_count += 1
     session.add(post)
 
@@ -304,30 +295,29 @@ def get_post_detail(session: Session, post_id: int, current_user_id: int) -> Pos
     5. 自动增加浏览量 (+1 view count)
     """
 
-    # 1. 查询帖子 (包含关联对象)
+    # 查询帖子 (包含关联对象)
     post = session.get(CommunityPost, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
 
-    # 2. 权限/可见性检查 (简单的逻辑，可根据需求扩展)
-    # 如果是私密贴，且看的人不是作者 -> 403
+    # 权限/可见性检查
     if post.visibility == Visibility.PRIVATE and post.user_id != current_user_id:
         raise HTTPException(status_code=403, detail="该帖子为私密状态，无法查看")
 
-    # 如果是粉丝可见，且未关注 -> (这里可以加逻辑，暂时略过，保持简单)
 
-    # 3. 增加浏览量 (View Count +1)
+
+    # 增加浏览量
     post.view_count += 1
     session.add(post)
     session.commit()
     session.refresh(post)  # 刷新以获取最新数据
 
-    # 4. 获取关联对象
+    # 获取关联对象
     asset = post.asset
     author = post.author
 
-    # 5. 查询交互状态 (User -> Post/Author)
-    # A. 是否点赞
+    # 查询交互状态 (User -> Post/Author)
+    # 是否点赞
     is_liked = session.exec(
         select(InteractionLike).where(
             InteractionLike.user_id == current_user_id,
@@ -335,7 +325,7 @@ def get_post_detail(session: Session, post_id: int, current_user_id: int) -> Pos
         )
     ).first() is not None
 
-    # B. 是否收藏
+    # 是否收藏
     is_collected = session.exec(
         select(PostCollection).where(
             PostCollection.user_id == current_user_id,
@@ -363,7 +353,7 @@ def get_post_detail(session: Session, post_id: int, current_user_id: int) -> Pos
     db_comments = session.exec(stmt_comments).all()
 
     for c in db_comments:
-        c_user = c.user  # 加载评论者
+        c_user = c.user
         comment_list.append(CommentOut(
             id=c.id,
             user_id=c_user.id,
@@ -379,7 +369,7 @@ def get_post_detail(session: Session, post_id: int, current_user_id: int) -> Pos
         post_id=post.id,
         content=post.content,
         published_at=str(post.published_at),
-        visibility=post.visibility.value,  # Enum 转 string
+        visibility=post.visibility.value,
         allow_download=post.allow_download,
 
         # Stats
@@ -436,15 +426,15 @@ def get_my_collected_posts(session: Session, current_user_id: int) -> List[dict]
         return []
 
 
-    # A. 我点赞过的帖子ID
+    # 我点赞过的帖子ID
     liked_ids_stmt = select(InteractionLike.post_id).where(InteractionLike.user_id == current_user_id)
     my_liked_ids = set(session.exec(liked_ids_stmt).all())
 
-    # B. 我评论过的帖子ID
+    # 我评论过的帖子ID
     commented_ids_stmt = select(Comment.post_id).where(Comment.user_id == current_user_id).distinct()
     my_commented_ids = set(session.exec(commented_ids_stmt).all())
 
-    # C. 我关注的用户ID (用于判断是否关注了原作者)
+    # 我关注的用户ID (用于判断是否关注了原作者)
     following_ids_stmt = select(UserFollow.followed_id).where(UserFollow.follower_id == current_user_id)
     my_following_ids = set(session.exec(following_ids_stmt).all())
 

@@ -48,7 +48,7 @@ class PostCard(SQLModel):
     【社区帖子卡片】
     包含帖子基本信息、作者信息、以及当前用户与帖子的交互状态
     """
-    # 1. 帖子基本信息
+    # 帖子基本信息
     post_id: int
     asset_id: int
     title: str  # 模型标题
@@ -57,21 +57,21 @@ class PostCard(SQLModel):
     tags: list[str]  # 标签
     published_at: str  # 发布时间
 
-    # 2. 统计数据 (新增 collect_count 和 comment_count)
+    # 统计数据 (新增 collect_count 和 comment_count)
     view_count: int = 0  # 浏览量
     like_count: int = 0  # 点赞数
-    collect_count: int = 0  # ★ 新增：收藏数
-    comment_count: int = 0  # ★ 新增：评论数
+    collect_count: int = 0  # 收藏数
+    comment_count: int = 0  # 评论数
 
-    # 3. 作者信息
+    # 作者信息
     owner_id: int  # 作者ID
     owner_name: str  # 作者用户名
     owner_avatar: str | None  # 作者头像
 
-    # 4. 当前用户与帖子的交互状态
+    # 当前用户与帖子的交互状态
     is_liked: bool  # 我是否点赞
-    is_collected: bool  # ★ 我是否收藏
-    is_following: bool  # ★ 我是否关注了该作者
+    is_collected: bool  # 我是否收藏
+    is_following: bool  # 我是否关注了该作者
     has_commented: bool  # 我是否评论过
 
 
@@ -83,7 +83,7 @@ class AssetDetail(SQLModel):
     id: int
     title: str
     description: str | None
-    remark: str | None  # ★只有详情页才返回这个
+    remark: str | None  # 只有详情页才返回这个
     tags: list[str]
     video_url: str  # 对应数据库的 video_path
     model_url: str | None  # 对应数据库的 model_path (生成的模型文件)
@@ -136,7 +136,7 @@ class StreamDirection(str, Enum):
     LEFT = "left"
     RIGHT = "right"
 
-    # --- 原有方向  ---
+    # 原有方向
     CLOCKWISE = "clockwise"
     COUNTER_CLOCKWISE = "counter_clockwise"
 

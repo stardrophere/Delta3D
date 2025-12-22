@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # =========================================================
-    # 基础配置 (匹配 .env 中的 PROJECT_NAME, ENVIRONMENT)
+    # 基础配置
     # =========================================================
     PROJECT_NAME: str = "Delta3D"
     ENVIRONMENT: str = "development"
@@ -12,19 +12,19 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = []
 
     # =========================================================
-    # 数据库 (DATABASE_URL)
+    # 数据库
     # =========================================================
     DATABASE_URL: str
 
     # =========================================================
-    # 安全认证 (SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES)
+    # 安全认证
     # =========================================================
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30
 
     # =========================================================
-    # 文件存储 (UPLOAD_DIR, DOMAIN)
+    # 文件存储
     # =========================================================
     UPLOAD_DIR: str = "./static/uploads"
     DOMAIN: str = "http://127.0.0.1:8000"

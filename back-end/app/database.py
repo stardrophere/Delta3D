@@ -18,8 +18,7 @@ engine = create_engine(
 
 def get_session():
     """
-    FastAPI 依赖注入使用的 Session 生成器。
-    用法: def read_users(session: Session = Depends(get_session)):
+    FastAPI 依赖注入使用的 Session 生成器
     """
     with Session(engine) as session:
         yield session
@@ -28,7 +27,6 @@ def get_session():
 def init_db():
     """
     初始化数据库表。
-    在 main.py 启动时调用此函数。
     """
     from app import models
 

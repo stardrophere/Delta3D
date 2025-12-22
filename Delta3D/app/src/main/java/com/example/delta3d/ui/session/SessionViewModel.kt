@@ -24,6 +24,10 @@ class SessionViewModel(app: Application) :
     private val _token = MutableStateFlow<String?>(null)
     val token: StateFlow<String?> = _token
 
+    // 首次启动状态
+    private val _isFirstLaunch = MutableStateFlow(true)
+    val isFirstLaunch: StateFlow<Boolean> = _isFirstLaunch
+
     // 定义当前用户的状态
     private val _currentUser = MutableStateFlow<UserDetail?>(null)
     val currentUser: StateFlow<UserDetail?> = _currentUser
@@ -36,13 +40,20 @@ class SessionViewModel(app: Application) :
     val loaded: StateFlow<Boolean> = _loaded
 
     init {
-        // 冷启动
+        // 冷启动逻辑
         viewModelScope.launch {
+            // Token
             val savedToken = tokenStore.accessTokenFlow.first()
             _token.value = savedToken
+
+            // 是否首次启动
+            val firstLaunchStatus = tokenStore.isFirstLaunchFlow.first()
+            _isFirstLaunch.value = firstLaunchStatus
+
+
             _loaded.value = true
 
-            // 如果有 Token，自动拉取用户信息
+            // 有 Token则自动拉取用户信息
             if (!savedToken.isNullOrBlank()) {
                 fetchCurrentUser(savedToken)
             }
@@ -58,25 +69,34 @@ class SessionViewModel(app: Application) :
         }
     }
 
+    // 引导页
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            tokenStore.setFirstLaunchCompleted()
+
+            _isFirstLaunch.value = false
+        }
+    }
+
     fun login(token: String) {
-        //  内存立刻可用
+
         _token.value = token
         // 持久化
         viewModelScope.launch { tokenStore.saveAccessToken(token) }
 
-        // 登录成功后，立刻拉取用户信息
+        // 拉取用户信息
         fetchCurrentUser(token)
     }
 
     fun logout() {
         _token.value = null
         _currentUser.value = null // 登出时清空信息
-        _totalUnreadCount.value = 0 // 出时清空未读数
+        _totalUnreadCount.value = 0 // 登出时清空未读数
         ChatSocketManager.disconnect() //中断连接
         viewModelScope.launch { tokenStore.clear() }
     }
 
-    // 更新未读数的方法
+    // 更新未读数
     fun updateTotalUnread(count: Int) {
         _totalUnreadCount.value = count
     }

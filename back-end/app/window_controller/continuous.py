@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 # --- 配置部分 ---
 TARGET_WINDOW_TITLE = "Instant Neural Graphics Primitives"
 SMOOTHING_FUNCTION = pyautogui.easeInOutQuad
-EDGE_MARGIN = 30  # 鼠标放到窗口边缘时与窗口边界的内边距（像素）
+EDGE_MARGIN = 30  # 鼠标放到窗口边缘时与窗口边界的内边距
 
 
 def find_target_window_info(title_part: str) -> Optional[Tuple[int, Tuple[int, int, int, int]]]:
@@ -79,8 +79,6 @@ class ContinuousController:
             self._action_thread = None
             print("--- 动作已停止。 ---")
 
-
-
     def start_zoom(self, direction: str, scrolls_per_step: int = 40, delay: float = 0.01):
         """开始连续放大或缩小。scrolls_per_step 越大越快。"""
         self._start_action(self._continuous_zoom, direction, scrolls_per_step, delay)
@@ -92,8 +90,6 @@ class ContinuousController:
     def start_rotate(self, direction: str, distance_per_step: int = 60, duration: float = 0.01):
         """开始连续旋转。distance_per_step 越大越快。"""
         self._start_action(self._continuous_drag_robust, direction, 'left', distance_per_step, duration)
-
-
 
     def _continuous_zoom(self, direction: str, scrolls_per_step: int, delay: float):
         """连续缩放的工作线程函数。"""
@@ -114,9 +110,9 @@ class ContinuousController:
 
     def _continuous_drag_robust(self, direction: str, button: str, distance_per_step: int, duration_per_step: float):
         """
-        连续/丝滑的拖拽（修正方向版 + 极速版）：
+        连续的拖拽：
         """
-        print(f"开始连续拖拽（极速版）：{direction.upper()}，按钮：{button}")
+        print(f"开始连续拖拽：{direction.upper()}，按钮：{button}")
 
         window_info = find_target_window_info(TARGET_WINDOW_TITLE)
         if not window_info:
@@ -146,23 +142,23 @@ class ContinuousController:
             uy = 1 if raw_dy > 0 else -1
             movement_axis = 'y'
 
-        # 智能计算起始点
+        # 计算起始点
         center_x, center_y = get_window_center(rect)
         start_x, start_y = center_x, center_y
 
-        # 如果要向左拖鼠标应从右边开始
+        # 左拖鼠标应从右边开始
         if raw_dx < 0:
             start_x = right - EDGE_MARGIN
         elif raw_dx > 0:
             start_x = left + EDGE_MARGIN
 
-        # 如果要向上拖鼠标应从底部开始
+        # 向上拖鼠标应从底部开始
         if raw_dy < 0:
             start_y = bottom - EDGE_MARGIN
         elif raw_dy > 0:
             start_y = top + EDGE_MARGIN
 
-        # 旋转操作通常锁死 Y 轴在中心，防止飘移
+        # 防止飘移
         is_rotation = direction.lower() in ('clockwise', 'counter_clockwise')
         if is_rotation:
             start_y = center_y
@@ -239,7 +235,6 @@ class ContinuousController:
                 target_y = cur_y + int_dy
                 target_x, target_y = _clamp_point_to_rect(target_x, target_y, rect, margin=EDGE_MARGIN)
 
-
                 pyautogui.moveTo(target_x, target_y, duration=TICK, tween=pyautogui.linear)
 
                 t_since_start += TICK
@@ -273,12 +268,10 @@ class ContinuousController:
                         dx = ux * move_px
                         dy = uy * move_px
 
-
                         if is_rotation: dy = 0
                         pyautogui.moveRel(int(dx), int(dy), duration=TICK, tween=pyautogui.linear)
 
                         decel_t += TICK
-
 
                     # 快速重置回起点
                     pyautogui.mouseUp(button=button)
@@ -294,13 +287,12 @@ class ContinuousController:
 
         finally:
             pyautogui.mouseUp(button=button)
-            print("鼠标按键已释放。")
+            print("按键已释放")
 
 
 # --- 示例
 if __name__ == '__main__':
     print("--- 开始连续控制测试 ---")
-    print(">>> 你有 3 秒时间将目标窗口置于前台！ <<<")
     time.sleep(3)
 
     controller = ContinuousController()
