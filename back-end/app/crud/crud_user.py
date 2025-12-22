@@ -15,14 +15,14 @@ def toggle_follow(session: Session, follower_id: int, followed_id: int) -> tuple
     if follower_id == followed_id:
         return False, 0  # 不能关注自己
 
-    # 1. 查关注记录
+    # 查关注记录
     statement = select(UserFollow).where(
         UserFollow.follower_id == follower_id,
         UserFollow.followed_id == followed_id
     )
     link = session.exec(statement).first()
 
-    # 2. 获取两个用户实体 (为了更新计数)
+    # 获取两个用户实体
     follower = session.get(User, follower_id)  # 我
     target_user = session.get(User, followed_id)  # 我要关注的人
 
@@ -30,7 +30,7 @@ def toggle_follow(session: Session, follower_id: int, followed_id: int) -> tuple
         return False, 0
 
     if link:
-        # --- 取消关注 ---
+        # 取消关注
         session.delete(link)
 
         # 更新计数
@@ -49,7 +49,7 @@ def toggle_follow(session: Session, follower_id: int, followed_id: int) -> tuple
 
         is_following = True
 
-    # 3. 提交事务
+
     session.add(follower)
     session.add(target_user)
     session.commit()
@@ -77,7 +77,7 @@ def create_user(session: Session, user_in: UserCreate) -> User:
         cover_url=DEFAULT_COVER
     )
 
-    # 存入数据库
+
     session.add(db_user)
     session.commit()
     session.refresh(db_user)

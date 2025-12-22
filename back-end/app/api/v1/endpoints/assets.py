@@ -53,7 +53,7 @@ def upload_asset(
     upload_root = Path(settings.UPLOAD_DIR)
     upload_root.mkdir(parents=True, exist_ok=True)
 
-    # 每个资产一个独立目录
+    # 每个model一个独立目录
     asset_uid = uuid.uuid4().hex
     asset_dir = upload_root / asset_uid
     asset_dir.mkdir(parents=True, exist_ok=False)
@@ -86,7 +86,7 @@ def upload_asset(
     # tags
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
-    # 写库：video_path 只存 base
+    # video_path 只存 base
     new_asset = crud_asset.create_asset(
         session=session,
         user_id=current_user.id,

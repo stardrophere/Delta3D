@@ -134,28 +134,26 @@ def run_and_stream(cmd_list, input_data, cwd=None):
     frame_count = 0
 
     try:
-        # 1. 使用 Popen 启动进程
+        # 使用 Popen 启动进程
         process = subprocess.Popen(
             cmd_list,
             shell=False,
             cwd=cwd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            # 关键：将标准错误 STDOUT 重定向到标准输出 STDOUT，统一读取
             stderr=subprocess.STDOUT,
             text=True  # 确保输入/输出以文本形式处理
         )
         print("PID: ", process.pid)
 
-        # 2. 发送预先准备好的输入数据 (非阻塞方式)
+        # 发送输入数据
         if input_data:
             print(f"--- 正在发送输入数据：\n{input_data.strip()} ---")
-            # 立即发送数据，不会阻塞主线程
             process.stdin.write(input_data)
             process.stdin.flush()
-            process.stdin.close()  # 输入发送完毕，关闭管道
+            process.stdin.close()
 
-        # 3. 实时循环读取输出
+        # 实时循环读取输出
         start_time = time.time()
         print("\n[ 开始运行 ]")
 
@@ -173,13 +171,13 @@ def run_and_stream(cmd_list, input_data, cwd=None):
                 frame_count = int(line[:-8])
                 # print("在这：", frame_count)
 
-        # 4. 等待进程完成并获取最终返回码
+        # 等待进程完成并获取最终返回码
         process.wait()
 
         end_time = time.time()
         print(f"[ 运行结束 ], 耗时{end_time - start_time}s")
 
-        # 5. 检查返回码
+        # 检查返回码
         if process.returncode != 0:
             print(f"\n!!! 命令执行失败 (退出码: {process.returncode}) !!!")
             return False, tip, frame_count
@@ -253,14 +251,14 @@ class ExternalCommandRunner:
             self.process = subprocess.Popen(
                 self.command_parts,
                 cwd=self.cwd,
-                # 继承主进程的控制台输出，以便查看 Instant NGP 的初始化日志
+                # 继承主进程的控制台输出
                 stdout=None,
                 stderr=None,
                 shell=False
             )
             print(f"进程已启动 (PID: {self.process.pid})。请查看弹出的 GUI 窗口。")
 
-            # 检查进程是否立即死亡 (GUI 程序通常不会立即死亡)
+            # 检查进程是否立即死亡
             time.sleep(1)
             if self.process.poll() is not None:
                 print(f"!!! 警告：进程在启动后立即退出，退出码: {self.process.returncode} !!!")
@@ -352,9 +350,7 @@ class NonBlockingCommandRunner:
         print("-" * 50)
 
         try:
-            # subprocess.run 是用于运行命令并等待其完成的最佳函数
-            # check=True: 如果子进程返回非零退出码，则抛出 CalledProcessError 异常
-            # stdout=None, stderr=None: 继承主进程的控制台，实现实时日志流式输出
+
             result = subprocess.run(
                 self.command_parts,
                 cwd=self.cwd,

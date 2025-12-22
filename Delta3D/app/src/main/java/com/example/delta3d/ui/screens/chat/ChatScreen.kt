@@ -44,7 +44,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-// --- 样式常量
+// 样式常量
 private val AccentColor = Color(0xFF64FFDA)
 private val MyBubbleGradient = Brush.linearGradient(
     colors = listOf(Color(0xFF64FFDA), Color(0xFF00B8D4))
@@ -95,12 +95,11 @@ fun ChatScreen(
     // 自动滚动逻辑
     LaunchedEffect(reversedMessages.firstOrNull()?.id) {
         if (reversedMessages.isNotEmpty()) {
-
             val isAtBottom = listState.firstVisibleItemIndex < 2
             val lastMsg = reversedMessages.first()
             val isMe = lastMsg.isMe(user?.id ?: 0)
 
-            // 如果是我发的，或者用户当前就在底部，则滚动显示最新消息
+            // 滚动显示最新消息
             if (isMe || isAtBottom) {
                 listState.animateScrollToItem(0)
             }
@@ -112,10 +111,7 @@ fun ChatScreen(
         snapshotFlow {
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
-
             val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-
-
             (lastVisibleItemIndex >= totalItems - 3) to (totalItems > 0)
         }
             .collect { (shouldLoad, hasItems) ->
@@ -129,7 +125,8 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         token?.let { rawToken ->
             try {
-                val authHeader = if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
+                val authHeader =
+                    if (rawToken.startsWith("Bearer ")) rawToken else "Bearer $rawToken"
                 RetrofitClient.api.markAsRead(authHeader, targetUserId)
                 sessionVm.refreshUnreadCount()
             } catch (e: Exception) {
@@ -145,14 +142,13 @@ fun ChatScreen(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0.dp),
-            topBar = {
-                GlassChatHeader(title = targetUserName, onBack = onBack)
-            },
+
             bottomBar = {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.navigationBars)
+                        .imePadding()
                 ) {
                     GlassChatInputBar(
                         value = inputText,
@@ -162,18 +158,21 @@ fun ChatScreen(
                 }
             }
         ) { innerPadding ->
+
+            // 计算顶部避让距离
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
             LazyColumn(
                 state = listState,
-                reverseLayout = true, // 核心开启反转布局
+                reverseLayout = true,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding()),
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .imePadding(),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-
-                    top = 20.dp,
-
+                    top = statusBarHeight + 64.dp + 20.dp,
                     bottom = 100.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -213,6 +212,13 @@ fun ChatScreen(
                 }
             }
         }
+
+
+        GlassChatHeader(
+            title = targetUserName,
+            onBack = onBack,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
@@ -269,7 +275,7 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
                 BubbleContent(msg.getSafeContent(), isMe)
             }
 
-            // 时间显示 ---
+            // 时间显示
             if (timeString.isNotEmpty()) {
                 Text(
                     text = timeString,
@@ -438,12 +444,13 @@ fun PostShareCard(
 @Composable
 fun GlassChatHeader(
     title: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF121212).copy(alpha = 0.4f))
+            .background(Color(0xFF121212).copy(alpha = 0.8f))
             .border(
                 width = 0.5.dp,
                 brush = Brush.verticalGradient(
@@ -454,7 +461,6 @@ fun GlassChatHeader(
     ) {
 
         Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-
 
         Row(
             modifier = Modifier
@@ -485,13 +491,6 @@ fun GlassChatHeader(
                 )
             }
 
-            IconButton(onClick = { /* 待定 */ }) {
-                Icon(
-                    Icons.Rounded.MoreVert,
-                    contentDescription = "Menu",
-                    tint = Color.White.copy(0.7f)
-                )
-            }
         }
     }
 }

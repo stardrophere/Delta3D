@@ -115,11 +115,11 @@ def get_my_downloaded_assets(session: Session, user_id: int) -> List[dict]:
         select(ModelAsset, func.max(DownloadRecord.created_at).label("last_download_time"))
         .join(DownloadRecord, ModelAsset.id == DownloadRecord.asset_id)
         .where(DownloadRecord.user_id == user_id)
-        .group_by(ModelAsset.id)  # 按模型分组，去重
+        .group_by(ModelAsset.id)  # 去重
         .order_by(func.max(DownloadRecord.created_at).desc())  # 按下载时间倒序，最近的在前面
     )
 
-    # exec(statement).all() 返回的是 [(ModelAsset, datetime), (ModelAsset, datetime), ...]
+    # exec(statement).all()
     results_with_time = session.exec(statement).all()
 
     # 查收藏状态

@@ -4,7 +4,7 @@ from .database import init_db
 from .api.v1.api import api_router
 from fastapi.staticfiles import StaticFiles
 
-# 1. 定义生命周期 (Lifespan)
+# 定义生命周期
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("正在初始化数据库...")
@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     yield
     print("服务器正在关闭...")
 
-# 2. 初始化 App
+# 初始化 App
 app = FastAPI(title="Delta3D", lifespan=lifespan)
 app.include_router(api_router, prefix="/api/v1")
 

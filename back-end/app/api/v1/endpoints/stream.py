@@ -1,5 +1,3 @@
-# app/api/v1/endpoints/stream.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -8,7 +6,7 @@ from app.database import get_session
 from app.models import User, ModelAsset, AssetStatus
 from app.api.deps import get_current_user
 from app.schemas import StreamStatus, ControlCommand
-from app.core.stream_manager import stream_session  # 导入刚才写的单例
+from app.core.stream_manager import stream_session
 from pathlib import Path
 
 router = APIRouter()

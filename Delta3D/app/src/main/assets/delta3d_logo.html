@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Delta3D Logo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: linear-gradient(180deg,
+                #2C5364 0%,
+                #203A43 50%,
+                #0F2027 100%
+            );
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <script src="./js/three.min.js"></script>
+
+    <script src="./js/postprocessing/EffectComposer.js"></script>
+    <script src="./js/postprocessing/RenderPass.js"></script>
+    <script src="./js/postprocessing/ShaderPass.js"></script>
+    <script src="./js/postprocessing/UnrealBloomPass.js"></script>
+
+    <script src="./js/shaders/CopyShader.js"></script>
+    <script src="./js/shaders/LuminosityHighPassShader.js"></script>
+
+    <script src="./js/lights/RectAreaLightUniformsLib.js"></script>
+    <script src="./js/loaders/FontLoader.js"></script>
+    <script src="./js/geometries/TextGeometry.js"></script>
+
+</head>
+<body>
+<div id="canvas-container"></div>
+<script>
+    // 全局变量
+    let scene, camera, renderer, composer;
+    let triangleGroup, mainGroup;
+    let textMesh = null;
+    let animationTime = 0;
+    let globalAlpha = 1.0;
+    let hasNotifiedComplete = false;
+
+    // logo尺寸
+    const baseSize = 1.6;
+    const extensionLength = 2.2;
+    const LINE_WIDTH = 0.09;
+    let lines = [];
+    let filledTriangles = [];
+    let rectLight, sweepLight;
+
+    // 时间轴配置
+    const TIME_DRAW_END = 17.0;
+    const TIME_ROTATE_END = 20.0;
+    const TIME_SCALE_END = 22.0;
+    const TIME_TEXT_START = 22.0;
+    const TIME_TEXT_END = 24.5;
+    const TIME_SWEEP_START = 24.5;
+    const TIME_SWEEP_END = 26.0;
+    const TIME_FADE_START = 26.5;
+    const TIME_FADE_DURATION = 1.5;
+    const TIME_ANIMATION_END = 28.0;
+
+    let finalBaseY = 0;
+    let bottomEdgeY_orig = 0;
+    let totalRotationCorrection = 0;
+
+    // 预创建复用对象
+    const _vec3A = new THREE.Vector3();
+    const _vec3B = new THREE.Vector3();
+    const _vec3Up = new THREE.Vector3(0, 1, 0);
+
+    function createGradientTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0, '#2C5364');
+        gradient.addColorStop(0.5, '#203A43');
+        gradient.addColorStop(1, '#0F2027');
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 2, 512);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    function notifyComplete() {
+        if (hasNotifiedComplete) return;
+        hasNotifiedComplete = true;
+        console.log('[Delta3D] Animation complete!');
+        try {
+            if (window.Android && window.Android.onAnimationComplete) {
+                window.Android.onAnimationComplete();
+            }
+        } catch(e) { console.log(e); }
+    }
+
+    function init() {
+        console.log('[Delta3D] Initializing...');
+        const container = document.getElementById('canvas-container');
+
+        scene = new THREE.Scene();
+        scene.background = createGradientTexture();
+        THREE.RectAreaLightUniformsLib.init();
+
+        const aspect = window.innerWidth / window.innerHeight;
+        const camDist = aspect < 1 ? 70 : 50;
+        camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 200);
+        camera.position.set(0, 0, camDist);
+
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.localClippingEnabled = true;
+        container.appendChild(renderer.domElement);
+
+        // 灯光
+        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+        rectLight = new THREE.RectAreaLight(0xffffff, 60, 50, 2);
+        rectLight.position.set(-25, 5, 20);
+        scene.add(rectLight);
+        sweepLight = new THREE.SpotLight(0xffffff, 0);
+        sweepLight.angle = Math.PI / 3;
+        sweepLight.penumbra = 0.3;
+        sweepLight.decay = 1;
+        sweepLight.distance = 150;
+        sweepLight.position.set(-50, 20, 35);
+        scene.add(sweepLight);
+        scene.add(sweepLight.target);
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        fillLight.position.set(10, 10, 20);
+        scene.add(fillLight);
+
+        // 后处理
+        composer = new THREE.EffectComposer(renderer);
+        const renderPass = new THREE.RenderPass(scene, camera);
+        renderPass.clearAlpha = 0;
+        composer.addPass(renderPass);
+        const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.4, 0.85);
+        bloom.threshold = 0.9;
+        composer.addPass(bloom);
+
+        mainGroup = new THREE.Group();
+        scene.add(mainGroup);
+        triangleGroup = new THREE.Group();
+        mainGroup.add(triangleGroup);
+
+        createGeometry();
+        loadFont();
+
+        window.addEventListener('resize', onResize);
+
+        console.log('[Delta3D] Starting animation loop');
+        animate();
+    }
+
+    function createGeometry() {
+        const r = baseSize;
+        const a = Math.PI / 6;
+        const pA = new THREE.Vector3(0, r, 0);
+        const pB = new THREE.Vector3(-r * Math.cos(a), -r * Math.sin(a), 0);
+        const pC = new THREE.Vector3(r * Math.cos(a), -r * Math.sin(a), 0);
+
+        addLine(pA, pB); addLine(pB, pC); addLine(pC, pA);
+
+        const vAB = new THREE.Vector3().subVectors(pB, pA).normalize();
+        const vBC = new THREE.Vector3().subVectors(pC, pB).normalize();
+        const vCA = new THREE.Vector3().subVectors(pA, pC).normalize();
+        const pBe = pB.clone().add(vAB.clone().multiplyScalar(extensionLength));
+        const pCe = pC.clone().add(vBC.clone().multiplyScalar(extensionLength));
+        const pAe = pA.clone().add(vCA.clone().multiplyScalar(extensionLength));
+
+        addLine(pB, pBe); addLine(pC, pCe); addLine(pA, pAe);
+        addLine(pBe, pCe); addLine(pCe, pAe); addLine(pAe, pBe);
+        addFill(pA, pAe, pBe);
+
+        const s2 = pAe.distanceTo(pBe), ex2 = s2 * 0.72;
+        const vAB2 = new THREE.Vector3().subVectors(pBe, pAe).normalize();
+        const vBC2 = new THREE.Vector3().subVectors(pCe, pBe).normalize();
+        const vCA2 = new THREE.Vector3().subVectors(pAe, pCe).normalize();
+        const pBe2 = pBe.clone().add(vAB2.clone().multiplyScalar(ex2));
+        const pCe2 = pCe.clone().add(vBC2.clone().multiplyScalar(ex2));
+        const pAe2 = pAe.clone().add(vCA2.clone().multiplyScalar(ex2));
+        addLine(pBe, pBe2); addLine(pCe, pCe2); addLine(pAe, pAe2);
+        addLine(pBe2, pCe2); addLine(pCe2, pAe2); addLine(pAe2, pBe2);
+        addFill(pBe, pBe2, pCe2);
+
+        const s3 = pAe2.distanceTo(pBe2), ex3 = s3 * 0.55;
+        const vAB3 = new THREE.Vector3().subVectors(pBe2, pAe2).normalize();
+        const vBC3 = new THREE.Vector3().subVectors(pCe2, pBe2).normalize();
+        const vCA3 = new THREE.Vector3().subVectors(pAe2, pCe2).normalize();
+        const pBe3 = pBe2.clone().add(vAB3.clone().multiplyScalar(ex3));
+        const pCe3 = pCe2.clone().add(vBC3.clone().multiplyScalar(ex3));
+        const pAe3 = pAe2.clone().add(vCA3.clone().multiplyScalar(ex3));
+        addLine(pBe2, pBe3); addLine(pCe2, pCe3); addLine(pAe2, pAe3);
+        addLine(pBe3, pCe3); addLine(pCe3, pAe3); addLine(pAe3, pBe3);
+        addFill(pCe2, pCe3, pAe3);
+
+        totalRotationCorrection = -Math.atan2(pCe3.y - pBe3.y, pCe3.x - pBe3.x);
+        bottomEdgeY_orig = (pBe3.y + pCe3.y) / 2;
+    }
+
+    function loadFont() {
+        new THREE.FontLoader().load(
+            './fonts/helvetiker_bold.typeface.json',
+            function(font) {
+                console.log('[Delta3D] Font loaded');
+                const aspect = window.innerWidth / window.innerHeight;
+                const size = aspect < 1 ? 2.0 : 3.0;
+
+                const geo = new THREE.TextGeometry('Delta3D', {
+                    font: font,
+                    size: size,
+                    height: 0.6,
+                    curveSegments: 12,
+                    bevelEnabled: true,
+                    bevelThickness: 0.08,
+                    bevelSize: 0.04,
+                    bevelSegments: 4
+                });
+                geo.computeBoundingBox();
+                const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+
+                textMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+                    color: 0xF5F5F5,
+                    emissive: 0x222222,
+                    metalness: 1,
+                    roughness: 0.1,
+                    transparent: true,
+                    opacity: 1,
+                    side: THREE.DoubleSide,
+                    clippingPlanes: [clip],
+                    clipShadows: true
+                }));
+                textMesh.userData = {
+                    clip: clip,
+                    h: geo.boundingBox.max.y - geo.boundingBox.min.y,
+                    minY: geo.boundingBox.min.y,
+                    width: geo.boundingBox.max.x - geo.boundingBox.min.x
+                };
+                textMesh.visible = false;
+                mainGroup.add(textMesh);
+            },
+            undefined,
+            function(err) { console.log('[Delta3D] Font error:', err); }
+        );
+    }
+
+    function addLine(s, e) {
+        const m = new THREE.Mesh(
+            new THREE.CylinderGeometry(LINE_WIDTH, LINE_WIDTH, 1, 12),
+            new THREE.MeshStandardMaterial({
+                color: 0xF5F5F5,
+                emissive: 0x222222,
+                metalness: 1,
+                roughness: 0.1,
+                transparent: true
+            })
+        );
+        m.scale.set(0, 0.001, 0);
+        m.userData = { s: s.clone(), e: e.clone() };
+        lines.push(m);
+        triangleGroup.add(m);
+    }
+
+    function addFill(o, v2, v3) {
+        const z = -0.05;
+        const v1 = new THREE.Vector3(o.x, o.y, z);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([v1.x,v1.y,v1.z, v1.x,v1.y,v1.z, v1.x,v1.y,v1.z]), 3));
+        const m = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+            color: 0x5A8FA0,
+            emissive: 0x1A3040,
+            metalness: 0.7,
+            roughness: 0.25,
+            transparent: true,
+            opacity: 0.95,
+            side: THREE.DoubleSide
+        }));
+        m.userData = { v1: v1, v2e: new THREE.Vector3(v2.x, v2.y, z), v3e: new THREE.Vector3(v3.x, v3.y, z) };
+        filledTriangles.push(m);
+        triangleGroup.add(m);
+    }
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = clock.getDelta();
+        if (dt > 0.1) return;
+
+        animationTime += dt * 2.1;
+
+        if (animationTime >= TIME_ANIMATION_END && !hasNotifiedComplete) {
+            setTimeout(notifyComplete, 100);
+        }
+
+        updateLights();
+        updateFadeOut();
+
+        if (globalAlpha <= 0) {
+            composer.render();
+            return;
+        }
+
+        updateLines();
+        updateFilledTriangles();
+        updateRotation();
+        updateScale();
+        updateText();
+
+        composer.render();
+    }
+
+    function updateLights() {
+        if (rectLight) {
+            const t = Date.now() * 0.0005;
+            rectLight.position.x = Math.sin(t) * 35;
+            rectLight.position.z = 20 + Math.cos(t * 0.5) * 5;
+        }
+
+        if (animationTime > TIME_SWEEP_START && animationTime < TIME_SWEEP_END) {
+            const p = (animationTime - TIME_SWEEP_START) / (TIME_SWEEP_END - TIME_SWEEP_START);
+
+            const logoY = triangleGroup.position.y || 0;
+            const textY = finalBaseY - 5.5;
+
+            sweepLight.position.x = THREE.MathUtils.lerp(-60, 60, p);
+            sweepLight.position.y = 15;
+            sweepLight.position.z = 30;
+
+            sweepLight.target.position.set(sweepLight.position.x * 0.3, textY + 2, 0);
+            sweepLight.target.updateMatrixWorld();
+
+            sweepLight.intensity = 150;
+        } else {
+            sweepLight.intensity = 0;
+        }
+    }
+
+    function updateFadeOut() {
+        if (animationTime > TIME_FADE_START) {
+            globalAlpha = Math.max(0, 1 - (animationTime - TIME_FADE_START) / TIME_FADE_DURATION);
+            for (let i = 0; i < lines.length; i++) {
+                lines[i].material.opacity = globalAlpha;
+            }
+            for (let i = 0; i < filledTriangles.length; i++) {
+                filledTriangles[i].material.opacity = 0.95 * globalAlpha;
+            }
+            if (textMesh && textMesh.material) {
+                textMesh.material.opacity = globalAlpha;
+            }
+        }
+    }
+
+    function updateLines() {
+        for (let i = 0; i < lines.length; i++) {
+            const m = lines[i];
+            const p = Math.max(0, Math.min(1, (animationTime - i * 0.3) / 0.8));
+            if (p > 0) {
+                _vec3A.lerpVectors(m.userData.s, m.userData.e, p);
+                const d = m.userData.s.distanceTo(_vec3A);
+                if (d > 0.01) {
+                    m.position.copy(m.userData.s).add(_vec3A).multiplyScalar(0.5);
+                    m.scale.set(1, d, 1);
+                    _vec3B.subVectors(_vec3A, m.userData.s).normalize();
+                    m.quaternion.setFromUnitVectors(_vec3Up, _vec3B);
+                }
+            }
+        }
+    }
+
+    function updateFilledTriangles() {
+        for (let i = 0; i < filledTriangles.length; i++) {
+            const m = filledTriangles[i];
+            const p = Math.max(0, Math.min(1, (animationTime - (14 + i)) / 1));
+            _vec3A.lerpVectors(m.userData.v1, m.userData.v2e, p);
+            _vec3B.lerpVectors(m.userData.v1, m.userData.v3e, p);
+            const pos = m.geometry.attributes.position.array;
+            pos[3] = _vec3A.x; pos[4] = _vec3A.y; pos[5] = _vec3A.z;
+            pos[6] = _vec3B.x; pos[7] = _vec3B.y; pos[8] = _vec3B.z;
+            m.geometry.attributes.position.needsUpdate = true;
+        }
+    }
+
+    function updateRotation() {
+        if (animationTime < TIME_DRAW_END) {
+            triangleGroup.rotation.z = animationTime * 0.3;
+        } else if (animationTime < TIME_ROTATE_END) {
+            if (!triangleGroup.userData.rs) {
+                const c = triangleGroup.rotation.z;
+                triangleGroup.userData.rs = c;
+                triangleGroup.userData.rt = Math.round(c / (Math.PI*2)) * Math.PI*2 + totalRotationCorrection;
+            }
+            const t = (animationTime - TIME_DRAW_END) / (TIME_ROTATE_END - TIME_DRAW_END);
+            triangleGroup.rotation.z = THREE.MathUtils.lerp(triangleGroup.userData.rs, triangleGroup.userData.rt, t*(2-t));
+        }
+    }
+
+    function updateScale() {
+        if (animationTime > TIME_ROTATE_END) {
+            let p = Math.max(0, Math.min(1, (animationTime - TIME_ROTATE_END) / (TIME_SCALE_END - TIME_ROTATE_END)));
+            p = p * p * (3 - 2 * p);
+            const aspect = window.innerWidth / window.innerHeight;
+            const offX = aspect < 1 ? 0 : 0;
+            const offY = aspect < 1 ? 4 : 5;
+            const finalScale = 0.6;
+            triangleGroup.scale.setScalar(THREE.MathUtils.lerp(1, finalScale, p));
+            triangleGroup.position.x = THREE.MathUtils.lerp(0, offX, p);
+            triangleGroup.position.y = THREE.MathUtils.lerp(0, offY, p);
+            finalBaseY = bottomEdgeY_orig * triangleGroup.scale.x + triangleGroup.position.y;
+        }
+    }
+
+    function updateText() {
+        if (animationTime > TIME_TEXT_START && textMesh) {
+            let p = Math.max(0, Math.min(1, (animationTime - TIME_TEXT_START) / (TIME_TEXT_END - TIME_TEXT_START)));
+
+            p = 1 - Math.pow(1 - p, 3);
+
+            const textWidth = textMesh.userData.width || 10;
+            const targetY = finalBaseY - 5.5;
+
+            textMesh.position.x = -textWidth / 2;
+
+            textMesh.position.y = targetY - 3.0 * (1 - p);
+
+            textMesh.material.opacity = p * globalAlpha;
+
+            textMesh.material.clippingPlanes = [];
+
+            textMesh.visible = true;
+        }
+    }
+
+    function onResize() {
+        const aspect = window.innerWidth / window.innerHeight;
+        camera.aspect = aspect;
+        camera.position.z = aspect < 1 ? 70 : 50;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    init();
+</script>
+</body>
+</html>
