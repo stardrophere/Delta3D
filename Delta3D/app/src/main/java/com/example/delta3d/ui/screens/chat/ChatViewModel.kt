@@ -104,6 +104,10 @@ class ChatViewModel(
         val content = _inputText.value.trim()
         if (content.isBlank()) return
 
+
+
+
+
         // 只负责发送指令给 WebSocket
         val msgSend = WSMessageSend(receiverId = targetUserId, content = content)
         socketManager.sendMessage(msgSend)

@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.ChatMessage
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.manager.ChatSocketManager
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
@@ -234,7 +235,7 @@ fun MessageBubble(msg: ChatMessage, isMe: Boolean, avatarUrl: String?, onPostCli
         avatarUrl?.let { url ->
             if (url.startsWith("http")) url
             else {
-                val base = RetrofitClient.BASE_URL.removeSuffix("/")
+                val base = AppConfig.currentBaseUrl.removeSuffix("/")
                 val path = url.removePrefix("/")
                 "$base/$path"
             }
@@ -358,7 +359,7 @@ fun PostShareCard(
         data.coverUrl?.let { url ->
             if (url.startsWith("http")) url
             else {
-                val base = RetrofitClient.BASE_URL.removeSuffix("/")
+                val base = AppConfig.currentBaseUrl.removeSuffix("/")
                 val path = url.removePrefix("/")
                 "$base/$path/images/0001.jpg"
             }

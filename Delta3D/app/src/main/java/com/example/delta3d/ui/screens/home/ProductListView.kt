@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.delta3d.api.AssetCard
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 
 // --- 样式常量 ---
 private val ListCardShape = RoundedCornerShape(16.dp)
@@ -119,7 +120,7 @@ fun ProductListItem(
 ) {
     val fullImageUrl = remember(item.coverUrl) {
         item.coverUrl?.let { url ->
-            val base = RetrofitClient.BASE_URL.removeSuffix("/")
+            val base = AppConfig.currentBaseUrl.removeSuffix("/")
             val path = url.removePrefix("/").removeSuffix("/")
             "$base/$path/images/0001.jpg"
         }

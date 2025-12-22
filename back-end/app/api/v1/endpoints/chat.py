@@ -9,11 +9,28 @@ from app.database import get_session
 from app.models import Message, User
 from app.schemas import MessageOut, MessageCreate, ChatConversation
 from app.core.socket_manager import manager
-
+from sqlalchemy import func
+import asyncio
+from functools import partial
 
 # from app.api.deps import get_current_user
 
 router = APIRouter()
+
+
+# 同步操作封锁
+def save_message_sync(session: Session, sender_id: int, receiver_id: int, content: str):
+    new_msg = Message(
+        sender_id=sender_id,
+        receiver_id=receiver_id,
+        content=content,
+        created_at=datetime.utcnow(),
+        is_read=False
+    )
+    session.add(new_msg)
+    session.commit()
+    session.refresh(new_msg)
+    return new_msg
 
 
 # ============================
@@ -31,9 +48,13 @@ async def websocket_endpoint(
     await manager.connect(user_id, websocket)
     try:
         while True:
-            # 接收消息 (JSON 格式: {"receiver_id": 2, "content": "你好"})
+            # 接收消息
             data = await websocket.receive_text()
-            msg_data = json.loads(data)
+
+            try:
+                msg_data = json.loads(data)
+            except json.JSONDecodeError:
+                continue
 
             receiver_id = msg_data.get("receiver_id")
             content = msg_data.get("content")
@@ -41,17 +62,14 @@ async def websocket_endpoint(
             if not receiver_id or not content:
                 continue
 
-            # 存入数据库
-            new_msg = Message(
-                sender_id=user_id,
-                receiver_id=receiver_id,
-                content=content,
-                created_at=datetime.utcnow(),
-                is_read=False
-            )
-            session.add(new_msg)
-            session.commit()
-            session.refresh(new_msg)
+            # 获取当前的异步事件循环
+            loop = asyncio.get_running_loop()
+
+            # 使用 partial 包装函数和参数
+            save_func = partial(save_message_sync, session, user_id, receiver_id, content)
+
+            # 在默认线程池中执行同步函数，并 await 等待结果
+            new_msg = await loop.run_in_executor(None, save_func)
 
             # 构造推送数据
             response_json = json.dumps({
@@ -65,16 +83,16 @@ async def websocket_endpoint(
                 }
             })
 
-            # 推送给接收者
+            # 推送消息
+            # 推给对方
             await manager.send_personal_message(response_json, receiver_id)
-
             # 回显给自己
             await manager.send_personal_message(response_json, user_id)
 
     except WebSocketDisconnect:
         manager.disconnect(user_id)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"WebSocket Error: {e}")
         manager.disconnect(user_id)
 
 
@@ -110,68 +128,66 @@ def get_conversations(
         current_user: User = Depends(get_current_user),
         session: Session = Depends(get_session)
 ):
-    """
-    获取消息列表：返回每个对话对象的最后一条消息、时间和未读数
-    """
     user_id = current_user.id
 
-    # 找出所有和我有关的消息 (发给我的 OR 我发出的)
-    statement = select(Message.sender_id, Message.receiver_id, Message.created_at) \
-        .where(or_(Message.sender_id == user_id, Message.receiver_id == user_id)) \
-        .order_by(Message.created_at.desc())
+    subquery = select(
+        func.max(Message.id).label("max_id")
+    ).where(
+        or_(Message.sender_id == user_id, Message.receiver_id == user_id)
+    ).group_by(
 
-    all_interactions = session.exec(statement).all()
+    )
 
-    #提取所有有过对话的“对方用户ID” (保持顺序，最近的在前面)
-    contact_ids = []
-    seen = set()
-    for msg in all_interactions:
-        # 确定对方是谁
-        other_id = msg.sender_id if msg.receiver_id == user_id else msg.receiver_id
-        if other_id not in seen:
-            seen.add(other_id)
-            contact_ids.append(other_id)
+    # 查出所有涉及 current_user 的消息，按时间倒序
+    stmt = select(Message).where(
+        or_(Message.sender_id == user_id, Message.receiver_id == user_id)
+    ).order_by(Message.created_at.desc())
 
-    # 组装结果列表
-    conversations = []
-    for contact_id in contact_ids:
-        # 3.1 获取对方用户信息
-        contact_user = session.get(User, contact_id)
-        if not contact_user:
-            continue
+    all_msgs = session.exec(stmt).all()
 
-        # 获取最后一条具体消息内容
-        #    条件：(我发给TA) OR (TA发给我) -> 按时间倒序 -> 取第1条
-        last_msg_stmt = select(Message).where(
-            or_(
-                (Message.sender_id == user_id) & (Message.receiver_id == contact_id),
-                (Message.sender_id == contact_id) & (Message.receiver_id == user_id)
-            )
-        ).order_by(Message.created_at.desc()).limit(1)
+    conversations_map = {}  # target_user_id -> {last_msg, unread_count}
 
-        last_msg = session.exec(last_msg_stmt).first()
-        if not last_msg:
-            continue
+    for msg in all_msgs:
+        target_id = msg.sender_id if msg.receiver_id == user_id else msg.receiver_id
 
-        # 统计发给我且未读的数量
-        unread_count = session.exec(
-            select(Message).where(
-                Message.sender_id == contact_id,  # TA发的
-                Message.receiver_id == user_id,  # 我收的
-                Message.is_read == False  # 没读的
-            )
-        ).all()
+        if target_id not in conversations_map:
+            # 这是一个新发现的对话，因为是倒序
+            conversations_map[target_id] = {
+                "last_message": msg.content,
+                "last_message_time": msg.created_at,
+                "unread_count": 0
+            }
 
-        conversations.append(ChatConversation(
-            user_id=contact_user.id,
-            username=contact_user.username,
-            avatar_url=contact_user.avatar_url,
-            last_message=last_msg.content,
-            last_message_time=last_msg.created_at,
-            unread_count=len(unread_count)
+        # 统计未读：如果是对方发给我的，且未读
+        if msg.sender_id == target_id and not msg.is_read:
+            conversations_map[target_id]["unread_count"] += 1
+
+    # 批量查出所有联系人的用户信息
+    target_ids = list(conversations_map.keys())
+    if not target_ids:
+        return []
+
+    users_stmt = select(User).where(User.id.in_(target_ids))
+    users = session.exec(users_stmt).all()
+    user_map = {u.id: u for u in users}
+
+    # 3. 组装结果
+    result = []
+    for uid in target_ids:  # 保持时间顺序
+        user_info = user_map.get(uid)
+        if not user_info: continue
+
+        conv_data = conversations_map[uid]
+        result.append(ChatConversation(
+            user_id=user_info.id,
+            username=user_info.username,
+            avatar_url=user_info.avatar_url,
+            last_message=conv_data["last_message"],
+            last_message_time=conv_data["last_message_time"],
+            unread_count=conv_data["unread_count"]
         ))
 
-    return conversations
+    return result
 
 
 @router.post("/conversations/{other_user_id}/read")

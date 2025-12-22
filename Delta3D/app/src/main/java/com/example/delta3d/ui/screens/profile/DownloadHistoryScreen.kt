@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.AssetCard
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.components.FeedbackType
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
@@ -178,7 +179,7 @@ fun DownloadHistoryItem(
                 val imageUrl = if (asset.coverUrl?.startsWith("http") == true) {
                     asset.coverUrl
                 } else {
-                    "${RetrofitClient.BASE_URL.removeSuffix("/")}${asset.coverUrl}/images/0001.jpg"
+                    "${AppConfig.currentBaseUrl.removeSuffix("/")}${asset.coverUrl}/images/0001.jpg"
                 }
 
                 AsyncImage(

@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.PostCard
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.screens.home.EditableGlassySearchBar
 import com.example.delta3d.ui.screens.home.TagColorBinder
@@ -378,7 +379,7 @@ fun CommunityFeedItem(
 ) {
     val imageUrl = remember(post.coverUrl) {
         post.coverUrl?.let { url ->
-            val base = RetrofitClient.BASE_URL.removeSuffix("/")
+            val base = AppConfig.currentBaseUrl.removeSuffix("/")
             val path = url.removePrefix("/").removeSuffix("/")
             "$base/$path/images/0001.jpg"
         }
@@ -388,7 +389,7 @@ fun CommunityFeedItem(
             if (url.startsWith("http")) {
                 url
             } else {
-                val base = RetrofitClient.BASE_URL.removeSuffix("/")
+                val base = AppConfig.currentBaseUrl.removeSuffix("/")
                 val path = url.removePrefix("/")
                 "$base/$path"
             }

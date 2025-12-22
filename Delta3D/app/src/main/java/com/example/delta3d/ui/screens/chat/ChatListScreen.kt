@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.ChatConversation
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
 import java.time.LocalDateTime
@@ -106,7 +107,7 @@ fun ConversationItem(
 ) {
     val avatarUrl = remember(chat.avatarUrl) {
         chat.avatarUrl?.let { url ->
-            if (url.startsWith("http")) url else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${
+            if (url.startsWith("http")) url else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${
                 url.removePrefix("/")
             }"
         }
