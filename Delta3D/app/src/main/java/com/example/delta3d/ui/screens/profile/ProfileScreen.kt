@@ -37,6 +37,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
@@ -117,14 +118,14 @@ fun ProfileScreen(
                 val coverUrl = remember(user.coverUrl) {
                     user.coverUrl?.let {
                         if (it.startsWith("http")) it else "${
-                            RetrofitClient.BASE_URL.removeSuffix("/")
+                            AppConfig.currentBaseUrl.removeSuffix("/")
                         }${it}"
                     }
                 }
                 val avatarUrl = remember(user.avatarUrl) {
                     user.avatarUrl?.let {
                         if (it.startsWith("http")) it else "${
-                            RetrofitClient.BASE_URL.removeSuffix("/")
+                            AppConfig.currentBaseUrl.removeSuffix("/")
                         }${it}"
                     }
                 }

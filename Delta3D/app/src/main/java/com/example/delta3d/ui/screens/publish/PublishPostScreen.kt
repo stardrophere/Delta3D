@@ -39,6 +39,7 @@ import coil.request.ImageRequest
 import com.example.delta3d.api.AssetCard
 import com.example.delta3d.api.PostCreateRequest
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
@@ -423,7 +424,7 @@ fun SelectableAssetItem(
 ) {
     val fullImageUrl = remember(item.coverUrl) {
         item.coverUrl?.let { url ->
-            val base = RetrofitClient.BASE_URL.removeSuffix("/")
+            val base = AppConfig.currentBaseUrl.removeSuffix("/")
             val path = url.removePrefix("/").removeSuffix("/")
             "$base/$path/images/0001.jpg"
         }

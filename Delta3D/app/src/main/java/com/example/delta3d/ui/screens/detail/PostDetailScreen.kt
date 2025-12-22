@@ -48,6 +48,7 @@ import com.example.delta3d.ui.screens.home.TagPalette
 import com.example.delta3d.ui.session.SessionViewModel
 import androidx.compose.ui.platform.LocalContext
 import com.example.delta3d.api.ChatConversation
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
 import com.example.delta3d.ui.screens.chat.ChatAvatar
@@ -635,7 +636,7 @@ fun CommentInputArea(
     val fullAvatarUrl = remember(currentUserAvatar) {
         currentUserAvatar?.let { url ->
             if (url.startsWith("http")) url
-            else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${url.removePrefix("/")}"
+            else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${url.removePrefix("/")}"
         }
     }
 
@@ -750,7 +751,7 @@ fun AuthorInfoRow(
     val fullAvatarUrl = remember(ownerAvatar) {
         ownerAvatar?.let { url ->
             if (url.startsWith("http")) url
-            else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${url.removePrefix("/")}"
+            else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${url.removePrefix("/")}"
         }
     }
     Row(
@@ -826,7 +827,7 @@ fun CommentItem(comment: CommentOut) {
         val fullAvatarUrl = remember(comment.avatarUrl) {
             comment.avatarUrl?.let { url ->
                 if (url.startsWith("http")) url
-                else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${url.removePrefix("/")}"
+                else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${url.removePrefix("/")}"
             }
         }
         Box(
@@ -970,7 +971,7 @@ fun ShareContactItem(contact: ChatConversation, onClick: () -> Unit) {
     val finalAvatarUrl = remember(contact.avatarUrl) {
         contact.avatarUrl?.let { url ->
             if (url.startsWith("http")) url
-            else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${url.removePrefix("/")}"
+            else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${url.removePrefix("/")}"
         }
     }
 

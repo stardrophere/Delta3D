@@ -34,6 +34,7 @@ import com.example.delta3d.ui.session.SessionViewModel
 import androidx.compose.material.icons.rounded.Female
 import androidx.compose.material.icons.rounded.Male
 import androidx.compose.material.icons.rounded.Transgender
+import com.example.delta3d.config.AppConfig
 
 
 private val ListCardShape = RoundedCornerShape(16.dp)
@@ -132,7 +133,7 @@ fun UserListItem(
 ) {
     val avatarUrl = remember(user.avatarUrl) {
         user.avatarUrl?.let {
-            if (it.startsWith("http")) it else "${RetrofitClient.BASE_URL.removeSuffix("/")}${it}"
+            if (it.startsWith("http")) it else "${AppConfig.currentBaseUrl.removeSuffix("/")}${it}"
         }
     }
 

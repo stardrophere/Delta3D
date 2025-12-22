@@ -79,6 +79,7 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.Warning
+import com.example.delta3d.config.AppConfig
 
 // --- 样式常量 ---
 private val CardShape = RoundedCornerShape(16.dp)
@@ -501,7 +502,7 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
 
     val height = remember { item.height.dp }
     val fullImageUrl = remember(item.coverUrl, item.status) {
-        val base = RetrofitClient.BASE_URL.removeSuffix("/")
+        val base = AppConfig.currentBaseUrl.removeSuffix("/")
         if (item.status == "failed" || item.status == "error") {
             "$base/static/states/error.png"
         } else {
@@ -784,7 +785,7 @@ fun GlassyUploadGuideDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // ---底部按钮
+                // 底部按钮
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {

@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.delta3d.api.AssetDetail
 import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.components.FeedbackType
 import com.example.delta3d.ui.components.GlassyFeedbackPopup
 import com.example.delta3d.ui.components.rememberFeedbackState
@@ -302,7 +303,7 @@ fun AssetDetailScreen(
                         onCopyLink = {
                             // 静态页面地址
                             val staticPlaceholderUrl =
-                                "${RetrofitClient.BASE_URL}static/coming_soon.html"
+                                "${AppConfig.currentBaseUrl}static/coming_soon.html"
 
                             //复制到剪贴板
                             val clipboard =
@@ -476,7 +477,7 @@ fun startSystemDownload(
     onError: (String) -> Unit
 ) {
     try {
-        val baseUrl = RetrofitClient.BASE_URL.removeSuffix("/")
+        val baseUrl = AppConfig.currentBaseUrl.removeSuffix("/")
 
 
         val cleanPath = relativeUrl.replace("\\", "/").removePrefix("/")
@@ -1158,7 +1159,7 @@ fun ImageCarouselHeader(
     // 处理失败状态
     if (status == "failed" || status == "error") {
         val errorImageUrl = remember {
-            val base = RetrofitClient.BASE_URL.removeSuffix("/")
+            val base = AppConfig.currentBaseUrl.removeSuffix("/")
             "$base/static/states/error.png"
         }
 
@@ -1278,7 +1279,7 @@ fun ImageCarouselHeader(
 
 private fun generateRandomImageUrls(baseUrlRaw: String, count: Int): List<String> {
     val baseUrl = if (baseUrlRaw.startsWith("http", ignoreCase = true)) baseUrlRaw
-    else "${RetrofitClient.BASE_URL.removeSuffix("/")}/${baseUrlRaw.removePrefix("/")}"
+    else "${AppConfig.currentBaseUrl.removeSuffix("/")}/${baseUrlRaw.removePrefix("/")}"
 
     val cleanBase = baseUrl.substringBefore("?").substringBeforeLast("/video.mp4")
     val indices = (1..60).shuffled().take(count).sorted()

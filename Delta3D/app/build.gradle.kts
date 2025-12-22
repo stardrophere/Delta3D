@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.ui.graphics)
     // 脱糖
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
