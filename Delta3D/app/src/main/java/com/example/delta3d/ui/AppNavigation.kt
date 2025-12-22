@@ -1,11 +1,18 @@
 package com.example.delta3d.ui
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -14,18 +21,16 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.delta3d.ui.components.BottomNavBar
-import com.example.delta3d.ui.screens.home.HomeScreen
 import com.example.delta3d.ui.screens.auth.LoginScreen
 import com.example.delta3d.ui.screens.auth.RegisterScreen
-import androidx.compose.runtime.collectAsState
-import com.example.delta3d.ui.screens.onboarding.DeltaTreeScreen
 import com.example.delta3d.ui.screens.chat.ChatListScreen
 import com.example.delta3d.ui.screens.chat.ChatScreen
 import com.example.delta3d.ui.screens.community.CommunityScreen
-import com.example.delta3d.ui.session.SessionViewModel
 import com.example.delta3d.ui.screens.detail.AssetDetailScreen
 import com.example.delta3d.ui.screens.detail.PostDetailScreen
+import com.example.delta3d.ui.screens.home.HomeScreen
 import com.example.delta3d.ui.screens.onboarding.Delta3DLogoSplash
+import com.example.delta3d.ui.screens.onboarding.DeltaTreeScreen
 import com.example.delta3d.ui.screens.preview.StreamPreviewScreen
 import com.example.delta3d.ui.screens.profile.DownloadHistoryScreen
 import com.example.delta3d.ui.screens.profile.PlanSettingsScreen
@@ -35,10 +40,12 @@ import com.example.delta3d.ui.screens.profile.SavedPostsScreen
 import com.example.delta3d.ui.screens.profile.UserListScreen
 import com.example.delta3d.ui.screens.publish.PublishPostScreen
 import com.example.delta3d.ui.screens.upload.UploadScreen
+import com.example.delta3d.ui.session.SessionViewModel
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 //val chatSocketManager = ChatSocketManager()
+private val AccentColor = Color(0xFF64FFDA)
 
 @Composable
 fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
@@ -46,11 +53,21 @@ fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
     val token by sessionVm.token.collectAsState()
     val loaded by sessionVm.loaded.collectAsState()
 
+    if (!loaded) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = AccentColor)
+        }
+        return
+    }
+
     //起始页
-    val startDestination = if (!loaded) {
-        "empty"
-    } else if (isFirstLaunch) {
-        "delta_tree"
+    val startDestination = if (isFirstLaunch) {
+        "delta_tree?isReplay=false"
     } else if (token.isNullOrBlank()) {
         "login"
     } else {
@@ -69,10 +86,16 @@ fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
 
     // 监听 Token 失效/退出登录
     LaunchedEffect(token) {
-        if (token.isNullOrBlank()) {
+        // if (token.isNullOrBlank()) {
+        //     val current = navController.currentBackStackEntry?.destination?.route
+        //     if (current != "login" && current != "register" && current != "delta_tree" && current != "logo") {
+        //         navController.navigate("login") { ... }
+        //     }
+        // }
+
+        if (token.isNullOrBlank() && !isFirstLaunch) {
             val current = navController.currentBackStackEntry?.destination?.route
-            // 不在引导流程则登录
-            if (current != "login" && current != "delta_tree" && current != "logo" && current != null) {
+            if (current != "login" && current != "register") {
                 navController.navigate("login") {
                     popUpTo(0) { inclusive = true }
                     launchSingleTop = true
@@ -87,12 +110,18 @@ fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
                 BottomNavBar(
                     currentRoute = currentRoute ?: "home",
                     onNavigate = { targetRoute ->
-                        navController.navigate(targetRoute) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                        try {
+                            if (currentRoute != targetRoute) {
+                                navController.navigate(targetRoute) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
-                            launchSingleTop = true
-                            restoreState = true
+                        } catch (e: Exception) {
+                            Log.e("AppNavigation", "Navigation error: ${e.message}")
                         }
                     }
                 )
