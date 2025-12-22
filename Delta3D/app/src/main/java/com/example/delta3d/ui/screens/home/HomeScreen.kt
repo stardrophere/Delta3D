@@ -773,12 +773,12 @@ fun GlassyUploadGuideDialog(
                     GuideTipItem(
                         icon = Icons.Rounded.Timer,
                         title = "Keep it Short",
-                        desc = "Duration must be under 30 seconds."
+                        desc = "Duration should be under 30 seconds."
                     )
                     GuideTipItem(
                         icon = Icons.Rounded.SdStorage,
                         title = "File Size Limit",
-                        desc = "File size must be under 20MB."
+                        desc = "File size should be under 20MB."
                     )
                 }
 
