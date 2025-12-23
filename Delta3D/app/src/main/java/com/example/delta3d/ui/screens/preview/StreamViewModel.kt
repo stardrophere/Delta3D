@@ -4,9 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delta3d.api.*
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class StreamUiState {
     object Idle : StreamUiState()
@@ -26,13 +28,13 @@ class StreamViewModel : ViewModel() {
             try {
                 val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
 
-                Log.d("TRACK_STREAM", "1. 请求启动推流: AssetId=$assetId")
+                Log.d("TRACK_STREAM", "请求启动推流: AssetId=$assetId")
 
                 val status = RetrofitClient.api.startStream(authHeader, assetId)
 
                 Log.d(
                     "TRACK_STREAM",
-                    "2. 后端返回状态: Active=${status.isActive}, URL=${status.rtspUrl}"
+                    "后端返回状态: Active=${status.isActive}, URL=${status.rtspUrl}"
                 )
 
                 if (status.isActive && !status.rtspUrl.isNullOrEmpty()) {
@@ -52,12 +54,19 @@ class StreamViewModel : ViewModel() {
     // 停止推流
     fun stopStreamSession(token: String) {
         viewModelScope.launch {
-            try {
-                val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
-                RetrofitClient.api.stopStream(authHeader)
-                _uiState.value = StreamUiState.Idle
-            } catch (e: Exception) {
-                e.printStackTrace()
+            // 使用 NonCancellable 上下文，防止因页面销毁导致网络请求被中断
+            withContext(NonCancellable) {
+                try {
+                    Log.d("TRACK_STREAM", "正在发送停止推流请求...")
+                    val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+                    RetrofitClient.api.stopStream(authHeader)
+                    Log.d("TRACK_STREAM", "停止推流请求发送成功")
+
+                    _uiState.value = StreamUiState.Idle
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Log.e("TRACK_STREAM", "停止推流请求失败: ${e.message}")
+                }
             }
         }
     }
