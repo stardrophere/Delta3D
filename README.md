@@ -1,6 +1,7 @@
----
-
-# 3D 物体建模移动应用 (Delta3D)
+<div align="center">
+  <img src="images/logo.png" alt="Delta3D Logo" width="130">
+  <h1>3D 物体建模移动应用 (Delta3D)</h1>
+</div>
 
 ## 📖 项目简介
 
