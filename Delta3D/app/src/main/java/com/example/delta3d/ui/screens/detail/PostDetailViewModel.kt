@@ -135,7 +135,7 @@ class PostDetailViewModel : ViewModel() {
                 )
 
                 // 成功后，更新本地 UI 数据
-                val updatedComments = currentData.comments + newComment
+                val updatedComments = listOf(newComment) + currentData.comments
                 val updatedCount = currentData.commentCount + 1
 
                 _uiState.value = PostUiState.Success(

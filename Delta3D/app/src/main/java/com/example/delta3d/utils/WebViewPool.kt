@@ -8,7 +8,7 @@ import android.os.MessageQueue
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.WebView
-import com.example.delta3d.data.TokenStore // 引入你的 TokenStore
+import com.example.delta3d.data.TokenStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -18,7 +18,7 @@ import java.util.LinkedList
 /**
  * WebView 预热池
  * 使用 IdleHandler 避免主线程卡顿
- *提前加载 HTML
+ * 提前加载 HTML
  * 只在首次启动时预热
  */
 @SuppressLint("SetJavaScriptEnabled")
