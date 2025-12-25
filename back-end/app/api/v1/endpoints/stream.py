@@ -29,22 +29,17 @@ def start_stream(
     if asset.status != "completed" or not asset.model_path:
         raise HTTPException(status_code=400, detail="模型尚未训练完成，无法预览")
 
-
     model_path_rel = Path(asset.model_path)  # 相对路径
 
     parts = model_path_rel.parts
     if not parts or parts[0].lower() != "static":
         raise HTTPException(status_code=500, detail=f"model_path 不合法(必须 static 开头): {asset.model_path}")
 
-
     under_static = Path(*parts[1:])
-
 
     static_root = Path("static").resolve()
 
-
     snapshot_path = static_root / under_static
-
 
     asset_dir = snapshot_path.parent
     scene_path = asset_dir / f"{asset_dir.name}_scene"
@@ -86,13 +81,19 @@ def start_stream(
     )
 
     host = request.url.hostname
-    # host = request.headers.get("host", "").split(":")[0]
 
-    rtsp_url = f"rtsp://{host}:8555/live"
+    # rtsp_url = f"rtsp://{host}:8555/live"
+    PUBLIC_IP = "47.107.130.88"
+    if host == PUBLIC_IP:
+        webrtc_url = f"http://{PUBLIC_IP}:29655/live"
+        print(f"检测到公网访问，返回: {webrtc_url}")
+    else:
+        webrtc_url = f"http://{host}:8889/live"
+        print(f"检测到内网访问，返回: {webrtc_url}")
 
     return StreamStatus(
         is_active=True,
-        rtsp_url=rtsp_url,
+        rtsp_url=webrtc_url,
         current_asset_id=asset.id
     )
 

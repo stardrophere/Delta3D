@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background: black;
+            overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+        }
+
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            z-index: 1;
+            opacity: 0;
+            background-color: black;
+            transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1); 
+        }
+
+
+        video::-webkit-media-controls,
+        video::-webkit-media-controls-start-playback-button,
+        video::-webkit-media-controls-overlay-play-button {
+            display: none !important;
+            -webkit-appearance: none;
+            opacity: 0;
+        }
+
+
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: black;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease-out;
+        }
+
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+
+            border: 3px solid rgba(100, 255, 218, 0.1);
+
+            border-top-color: #64FFDA;
+            border-radius: 50%;
+
+            animation: spin 1s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite;
+            margin-bottom: 24px;
+
+            box-shadow: 0 0 8px rgba(100, 255, 218, 0.2);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+
+        .status-title {
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+        }
+
+
+        .status-subtitle {
+            color: #64FFDA;
+            font-size: 13px;
+            opacity: 0.8;
+            font-family: monospace;
+        }
+
+        .hidden { opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<video id="video" autoplay muted playsinline></video>
+
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="status-title">Connecting Stream</div>
+    <div id="status-text" class="status-subtitle">Initializing...</div>
+</div>
+
+<script>
+    let retryCount = 0;
+    const maxRetries = 20;
+
+
+    function showVideoAndHideOverlay() {
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('loading-overlay');
+
+        if (video.videoWidth > 0 || video.readyState >= 2) {
+            console.log("WebRTC: Video ready, fading in...");
+
+            requestAnimationFrame(() => {
+                video.style.opacity = 1;
+            });
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                retryCount = 0;
+            }, 100);
+        }
+    }
+
+    async function start(streamUrl) {
+        const overlay = document.getElementById('loading-overlay');
+        const statusText = document.getElementById('status-text');
+        const video = document.getElementById('video');
+
+
+        overlay.classList.remove('hidden');
+        video.style.opacity = 0;
+
+
+        video.onloadeddata = showVideoAndHideOverlay;
+        video.onresize = showVideoAndHideOverlay;
+
+
+        if (retryCount === 0) {
+            statusText.innerText = "INITIALIZING...";
+        } else {
+
+            statusText.innerText = "ATTEMPTING (" + retryCount + "/" + maxRetries + ")...";
+        }
+
+        const pc = new RTCPeerConnection({ iceServers: [] });
+
+        pc.ontrack = (event) => {
+            console.log("WebRTC: Signal received");
+            video.srcObject = event.streams[0];
+        };
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+
+        try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            const whepUrl = streamUrl.endsWith('/whep') ? streamUrl : streamUrl + '/whep';
+            const response = await fetch(whepUrl, {
+                method: 'POST',
+                body: offer.sdp,
+                headers: { 'Content-Type': 'application/sdp' }
+            });
+
+            if (response.status === 404) throw new Error("404");
+            if (!response.ok) throw new Error(response.status);
+
+            const answer = await response.text();
+            await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+
+        } catch (e) {
+            console.warn("Conn Failed:", e.message);
+            pc.close();
+            video.onloadeddata = null;
+            video.onresize = null;
+
+            if (retryCount < maxRetries) {
+                retryCount++;
+
+                statusText.innerText = "WAITING (" + retryCount + "/" + maxRetries + ")...";
+
+                setTimeout(() => {
+                    start(streamUrl);
+                }, 1000);
+            } else {
+                statusText.innerText = "TIMEOUT";
+                document.querySelector('.status-title').innerText = "Connection Failed";
+                document.querySelector('.spinner').style.borderColor = "#FF5252"; 
+                document.querySelector('.spinner').style.borderTopColor = "#FF5252";
+                document.querySelector('.spinner').style.animation = "none";
+            }
+        }
+    }
+</script>
+</body>
+</html>
