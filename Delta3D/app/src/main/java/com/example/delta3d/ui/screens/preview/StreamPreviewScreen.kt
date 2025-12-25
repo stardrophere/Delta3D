@@ -42,6 +42,19 @@ import com.example.delta3d.api.StreamActionType
 import com.example.delta3d.api.StreamDirection
 import com.example.delta3d.ui.session.SessionViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+import com.example.delta3d.utils.WebViewPool
+import kotlinx.coroutines.delay
 
 // --- 样式定义 ---
 private val GlassControlColor = Color(0xFF1E1E1E).copy(alpha = 0.65f)
@@ -61,148 +74,41 @@ fun StreamPreviewScreen(
     val context = LocalContext.current
     val token by sessionVm.token.collectAsState()
     val uiState by streamVm.uiState.collectAsState()
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 重试计数器
-    var retryCount by remember { mutableIntStateOf(0) }
-    val maxRetries = 6
+
+    val webView = remember { WebViewPool.obtain(context) }
 
     // 初始化推流
     LaunchedEffect(assetId) {
         Log.d("TRACK_ID", "[PreviewScreen] 页面初始化, 接收到的 ID: $assetId")
-        retryCount = 0
         token?.let { streamVm.startStreamSession(it, assetId) }
     }
 
-    // 退出页面时停止推流
-    DisposableEffect(Unit) {
-        onDispose {
-            token?.let { streamVm.stopStreamSession(it) }
-        }
-    }
-
-    // 配置极低延迟的 LoadControl
-    val loadControl = remember {
-        DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                100,
-                200,
-                50,
-                50
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-    }
-
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .setLoadControl(loadControl) // 应用低延迟策略
-            .build().apply {
-                // 允许跳帧以保持低延迟
-                videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-
-                addListener(object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) {
-                        Log.e("TRACK_STREAM", "🔥 ExoPlayer 播放出错: ${error.message}", error)
-                        // 自动重试逻辑
-                        if (retryCount < maxRetries) {
-                            retryCount++
-                            Log.d(
-                                "TRACK_STREAM",
-                                "检测到播放失败，准备执行第 $retryCount 次重试..."
-                            )
-                        } else {
-                            Log.e("TRACK_STREAM", "超过最大重试次数，放弃播放")
-                        }
-                    }
-
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        // 如果播放成功开始 (STATE_READY)，重置重试计数
-                        if (playbackState == Player.STATE_READY) {
-                            retryCount = 0
-                        }
-                    }
-                })
-            }
-    }
-
-    // 处理重试逻辑
-    LaunchedEffect(retryCount) {
-        if (retryCount > 0) {
-            Log.d("TRACK_STREAM", "等待 1.5秒后重试...")
-            delay(2000)
-
-            if (uiState is StreamUiState.Streaming) {
-                val url = (uiState as StreamUiState.Streaming).url
-                Log.d("TRACK_STREAM", "执行重试: $url")
-
-                //低延迟 MediaItem
-                val mediaItem = MediaItem.Builder()
-                    .setUri(url)
-                    .setLiveConfiguration(
-                        MediaItem.LiveConfiguration.Builder()
-                            .setMaxPlaybackSpeed(1.1f)
-                            .setMinPlaybackSpeed(1.0f)
-                            .setTargetOffsetMs(50)
-                            .build()
-                    )
-                    .build()
-
-                val mediaSource = RtspMediaSource.Factory()
-                    .setForceUseRtpTcp(false) // 使用 UDP
-                    .setTimeoutMs(3000)
-                    .createMediaSource(mediaItem)
-
-                exoPlayer.setMediaSource(mediaSource)
-                exoPlayer.prepare()
-                exoPlayer.playWhenReady = true
-            }
-        }
-    }
-
-    // 监听 RTSP URL 变化并首次播放
+    // 2监听 URL 变化并触发 WebRTC 播放
     LaunchedEffect(uiState) {
-        if (uiState is StreamUiState.Streaming && retryCount == 0) {
-            val url = (uiState as StreamUiState.Streaming).url
-            Log.d("TRACK_STREAM", "ExoPlayer 首次准备播放: $url")
+        if (uiState is StreamUiState.Streaming) {
+            val streamUrl = (uiState as StreamUiState.Streaming).url
+            Log.d("TRACK_STREAM", "WebRTC 准备加载: $streamUrl")
 
-            // 低延迟 MediaItem
-            val mediaItem = MediaItem.Builder()
-                .setUri(url)
-                .setLiveConfiguration(
-                    MediaItem.LiveConfiguration.Builder()
-                        .setMaxPlaybackSpeed(1.1f)
-                        .setMinPlaybackSpeed(1.0f)
-                        .setTargetOffsetMs(50)
-                        .build()
-                )
-                .build()
 
-            val mediaSource = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(false)
-                .setTimeoutMs(3000)
-                .createMediaSource(mediaItem)
+            webView.loadUrl("file:///android_asset/webrtc_player.html")
 
-            exoPlayer.setMediaSource(mediaSource)
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
+            delay(500)
+
+            Log.d("TRACK_STREAM", "注入 JS 启动播放...")
+
+            webView.evaluateJavascript("start('$streamUrl')", null)
         }
     }
 
     // 生命周期管理
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                Lifecycle.Event.ON_RESUME -> exoPlayer.play()
-                Lifecycle.Event.ON_DESTROY -> exoPlayer.release()
-                else -> {}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
+    DisposableEffect(Unit) {
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            exoPlayer.release()
+            Log.d("TRACK_STREAM", "页面销毁，回收 WebView 并停止推流")
+
+            token?.let { streamVm.stopStreamSession(it) }
+
+            WebViewPool.recycle(webView)
         }
     }
 
@@ -215,7 +121,7 @@ fun StreamPreviewScreen(
         when (uiState) {
             is StreamUiState.Loading -> {
                 CircularProgressIndicator(
-                    color = AccentColor,
+                    color = Color(0xFF64FFDA),
                     modifier = Modifier.align(Alignment.Center)
                 )
                 Text(
@@ -247,58 +153,11 @@ fun StreamPreviewScreen(
             }
 
             is StreamUiState.Streaming -> {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // 视频层
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                player = exoPlayer
-                                useController = false
-                                // ZOOM 模式，裁剪多余部分以填满屏幕
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
 
-                    // 重试加载层
-                    if (retryCount > 0 && retryCount < maxRetries) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.75f))
-                                .pointerInput(Unit) {},
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = AccentColor,
-                                    strokeWidth = 4.dp,
-                                    modifier = Modifier.size(56.dp)
-                                )
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(
-                                    text = "Connecting to Stream...",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Retrying ($retryCount/$maxRetries)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.6f)
-                                )
-                            }
-                        }
-                    }
-                }
+                AndroidView(
+                    factory = { webView },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             else -> {}
@@ -329,7 +188,7 @@ fun StreamPreviewScreen(
     }
 }
 
-// --- 控制面板组件 ---
+// 控制面板组件
 
 @Composable
 fun StreamControlOverlay(
