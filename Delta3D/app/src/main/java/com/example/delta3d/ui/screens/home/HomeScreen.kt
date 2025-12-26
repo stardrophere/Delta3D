@@ -1,10 +1,8 @@
 package com.example.delta3d.ui.screens.home
 
-
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -16,11 +14,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
@@ -28,9 +28,16 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Cached
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.SdStorage
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,8 +55,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,29 +70,22 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.delta3d.api.AssetCard
-import com.example.delta3d.api.RetrofitClient
+import com.example.delta3d.config.AppConfig
 import com.example.delta3d.ui.screens.auth.AnimatedGradientBackground
 import com.example.delta3d.ui.session.SessionViewModel
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Cached
-import androidx.compose.material.icons.rounded.SdStorage
-import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.ui.window.Dialog
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.rounded.Warning
-import com.example.delta3d.config.AppConfig
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.ViewInAr
+import androidx.compose.ui.text.style.TextAlign
+
 
 // --- 样式常量 ---
 private val CardShape = RoundedCornerShape(16.dp)
@@ -112,67 +118,107 @@ private val TextWhite = Color.White
 private val TextGray = Color.White.copy(alpha = 0.6f)
 private val GlassContainerColor = Color(0xFF1E1E1E).copy(alpha = 0.95f)
 
+// 定义高度常量
+private val EXPANDED_HEIGHT = 300.dp
+private val COLLAPSED_HEIGHT = 200.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     innerPadding: PaddingValues = PaddingValues(0.dp),
     sessionVm: SessionViewModel,
     homeVm: HomeViewModel = viewModel(),
+    onNavigateToTree: () -> Unit,
     onAssetClick: (Int) -> Unit,
     onNavigateToUpload: (android.net.Uri) -> Unit
 ) {
     val token by sessionVm.token.collectAsState()
-
-    // 观察 VM 处理好的数据
     val displayAssets by homeVm.displayAssets.collectAsState()
     val isRefreshing by homeVm.isRefreshing.collectAsState()
     val searchQuery by homeVm.searchQuery.collectAsState()
     val processingCount by homeVm.processingCount.collectAsState()
-
-    // 网格/列表 视图切换状态
     var isGridView by remember { mutableStateOf(true) }
-    val BubbleGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF))
-    )
     var showUploadGuide by remember { mutableStateOf(false) }
-
-
     var showLimitDialog by remember { mutableStateOf(false) }
 
-    // 定义媒体选择器 Launcher
-    val mediaPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        // 当用户选中视频后，回调 URI 给上层导航
-        if (uri != null) {
-            onNavigateToUpload(uri)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                token?.let { homeVm.loadAssets(it) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    LaunchedEffect(token) {
-        token?.let { if (it.isNotEmpty()) homeVm.loadAssets(it) }
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> if (uri != null) onNavigateToUpload(uri) }
+
+    val onCollectToggle: (Int) -> Unit = { id -> token?.let { homeVm.toggleCollect(id, it) } }
+
+    val density = LocalDensity.current
+    val maxHeightPx = with(density) { EXPANDED_HEIGHT.toPx() }
+    val minHeightPx = with(density) { COLLAPSED_HEIGHT.toPx() }
+    val maxOffsetPx = maxHeightPx - minHeightPx
+    var heightOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isRefreshing) return Offset.Zero
+                if (available.y < 0) {
+                    val delta = available.y
+                    val newOffset = heightOffsetPx + delta
+                    val targetOffset = newOffset.coerceIn(-maxOffsetPx, 0f)
+                    val consumedY = targetOffset - heightOffsetPx
+                    heightOffsetPx = targetOffset
+                    return Offset(0f, consumedY)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (isRefreshing) return Offset.Zero
+                if (available.y > 0) {
+                    val delta = available.y
+                    val newOffset = heightOffsetPx + delta
+                    val targetOffset = newOffset.coerceIn(-maxOffsetPx, 0f)
+                    val consumedY = targetOffset - heightOffsetPx
+                    heightOffsetPx = targetOffset
+                    return Offset(0f, consumedY)
+                }
+                return Offset.Zero
+            }
+        }
     }
 
-    // 定义点击处理函数：调用 VM 的 toggleCollect
-    val onCollectToggle: (Int) -> Unit = { id ->
-        token?.let { homeVm.toggleCollect(id, it) }
-    }
-
-    // 进场动画状态
-    var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-
-    val headerAlpha by animateFloatAsState(if (entered) 1f else 0f, tween(800), label = "alpha")
-    val headerOffset by animateFloatAsState(
-        if (entered) 0f else 40f,
-        tween(800, easing = LinearOutSlowInEasing),
-        label = "offset"
-    )
-
-    // 如果正在搜索，强制显示列表视图
-    val showListView = !isGridView || searchQuery.isNotEmpty()
-
+    val currentHeaderHeight = with(density) { (maxHeightPx + heightOffsetPx).toDp() }
+    val expansionFraction = (currentHeaderHeight - COLLAPSED_HEIGHT) / (EXPANDED_HEIGHT - COLLAPSED_HEIGHT)
     val focusManager = LocalFocusManager.current
+    val pullRefreshState = rememberPullToRefreshState()
+
+    val headerTopMargin = 0.dp
+    val contentGap = 12.dp
+
+    val haptic = LocalHapticFeedback.current
+    var hasVibrated by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pullRefreshState.distanceFraction) {
+        if (pullRefreshState.distanceFraction >= 1f && !hasVibrated) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            hasVibrated = true
+        } else if (pullRefreshState.distanceFraction < 0.8f) {
+            hasVibrated = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -184,117 +230,172 @@ fun HomeScreen(
     ) {
         AnimatedGradientBackground()
 
-        // 内容列
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            //顶部 Header
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                    .offset(y = headerOffset.dp)
-                    .alpha(headerAlpha)
-            ) {
-                // 标题栏
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Δ 3D",
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp,
-                        color = Color.White
-                    )
-
-                    AnimatedVisibility(
-                        visible = processingCount > 0 && searchQuery.isEmpty(),
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        ProcessingStatusBadge(count = processingCount)
-                    }
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                if (expansionFraction >= 0.9f) {
+                    token?.let { homeVm.loadAssets(it) }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 搜索栏区域
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    EditableGlassySearchBar(
-                        query = searchQuery,
-                        onQueryChange = { homeVm.onSearchInput(it) }, //VM 防抖
-                        placeholder = "Search models or tags...",
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    AnimatedVisibility(
-                        visible = searchQuery.isEmpty(),
-                        enter = fadeIn() + expandHorizontally(),
-                        exit = fadeOut() + shrinkHorizontally()
-                    ) {
-                        Row {
-                            Spacer(modifier = Modifier.width(10.dp))
-                            GlassyIconButton(
-                                icon = if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
-                                onClick = { isGridView = !isGridView }
-                            )
-                        }
-                    }
-                }
-            }
-
-            //列表内容
-            Box(modifier = Modifier.weight(1f)) {
-                PullToRefreshBox(
+            },
+            state = pullRefreshState,
+            modifier = Modifier.fillMaxSize(),
+            indicator = {
+                GlassyRefreshIndicator(
+                    state = pullRefreshState,
                     isRefreshing = isRefreshing,
-                    onRefresh = { token?.let { homeVm.loadAssets(it) } },
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    if (displayAssets.isEmpty() && searchQuery.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "No results found for \"$searchQuery\"",
-                                color = Color.White.copy(0.5f),
-                                modifier = Modifier.offset(y = (-20).dp)
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(nestedScrollConnection)
+            ) {
+                val listTopPadding = headerTopMargin +
+                        currentHeaderHeight +
+                        contentGap
+
+                val listContentPadding = PaddingValues(
+                    top = listTopPadding,
+                    bottom = innerPadding.calculateBottomPadding() + 100.dp,
+                    start = 12.dp,
+                    end = 12.dp
+                )
+
+                // 列表内容
+                if (displayAssets.isEmpty() && !isRefreshing) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = listTopPadding),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (searchQuery.isNotEmpty()) {
+                            Text("No results for \"$searchQuery\"", color = Color.White.copy(0.5f))
+                        } else {
+                            // 空状态提示
+                            EmptyHomeState(
+                                onActionClick = {
+                                    if (processingCount >= MAX_PROCESSING_LIMIT) {
+                                        showLimitDialog = true
+                                    } else {
+                                        showUploadGuide = true
+                                    }
+                                }
                             )
                         }
-                    } else {
-                        AnimatedContent(
-                            targetState = showListView,
-                            transitionSpec = {
-                                (fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.98f))
-                                    .togetherWith(fadeOut(animationSpec = tween(300)))
-                            },
-                            label = "ViewSwitchAnimation",
-                            modifier = Modifier.fillMaxSize()
-                        ) { isListMode ->
-                            if (isListMode) {
-                                // 列表视图
-                                ProductListView(
-                                    dataList = displayAssets,
-                                    bottomPadding = innerPadding.calculateBottomPadding(),
-                                    onItemClick = onAssetClick,
-                                    onCollectClick = onCollectToggle
+                    }
+                } else {
+                    AnimatedContent(
+                        targetState = !isGridView || searchQuery.isNotEmpty(),
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "ListSwitch"
+                    ) { isListMode ->
+                        if (isListMode) {
+                            ProductListViewWithPadding(
+                                dataList = displayAssets,
+                                padding = listContentPadding,
+                                onItemClick = onAssetClick,
+                                onCollect = onCollectToggle
+                            )
+                        } else {
+                            LazyVerticalStaggeredGrid(
+                                columns = StaggeredGridCells.Fixed(2),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalItemSpacing = 12.dp,
+                                contentPadding = listContentPadding,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(displayAssets, key = { it.id }) { item ->
+                                    ProductCard(
+                                        item = item,
+                                        onClick = { onAssetClick(item.id) },
+                                        onCollectClick = { onCollectToggle(item.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Header 层
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(currentHeaderHeight)
+                        .padding(horizontal = 12.dp)
+                        .padding(top = headerTopMargin + innerPadding.calculateTopPadding())
+                        .align(Alignment.TopCenter)
+                ) {
+                    HomeTreeCard(
+                        modifier = Modifier.fillMaxSize(),
+                        expansionFraction = expansionFraction
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Δ 3D",
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Interactive Zone",
+                                        fontSize = 10.sp,
+                                        color = AccentColor,
+                                        modifier = Modifier.alpha(
+                                            (expansionFraction * 2 - 1).coerceIn(0f, 1f)
+                                        )
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedVisibility(visible = processingCount > 0) {
+                                        ProcessingStatusBadge(count = processingCount)
+                                        Spacer(modifier = Modifier.width(24.dp))
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(0.1f))
+                                            .clickable { onNavigateToTree() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.Fullscreen, null, tint = Color.White)
+                                    }
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                EditableGlassySearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { homeVm.onSearchInput(it) },
+                                    placeholder = "Search models...",
+                                    modifier = Modifier.weight(1f)
                                 )
-                            } else {
-                                // 网格视图
-                                ProductStaggeredGrid(
-                                    dataList = displayAssets,
-                                    bottomPadding = innerPadding.calculateBottomPadding(),
-                                    onItemClick = onAssetClick,
-                                    onCollectClick = onCollectToggle
-                                )
+                                AnimatedVisibility(visible = searchQuery.isEmpty()) {
+                                    Row {
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        GlassyIconButton(
+                                            icon = if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
+                                            onClick = { isGridView = !isGridView }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -306,7 +407,10 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = innerPadding.calculateBottomPadding() + 20.dp, end = 20.dp)
+                .padding(
+                    bottom = innerPadding.calculateBottomPadding() + 20.dp,
+                    end = 20.dp
+                )
         ) {
             GlassBubble(
                 modifier = Modifier
@@ -315,7 +419,6 @@ fun HomeScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
-                            // 判断次数
                             if (processingCount >= MAX_PROCESSING_LIMIT) {
                                 showLimitDialog = true
                             } else {
@@ -329,26 +432,157 @@ fun HomeScreen(
             )
         }
 
-        // 弹窗组件
         if (showUploadGuide) {
             GlassyUploadGuideDialog(
                 onDismiss = { showUploadGuide = false },
                 onConfirm = {
                     showUploadGuide = false
-                    mediaPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                    )
+                    mediaPickerLauncher.launch("video/*")
                 }
             )
         }
-
-        //限制弹窗
         if (showLimitDialog) {
-            GlassyLimitDialog(
-                onDismiss = { showLimitDialog = false }
+            GlassyLimitDialog(onDismiss = { showLimitDialog = false })
+        }
+    }
+}
+
+// 空状态引导组件
+@Composable
+fun EmptyHomeState(onActionClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp)
+            .offset(y = (-40).dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(Color.White.copy(0.05f), CircleShape)
+                .border(1.dp, Color.White.copy(0.1f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ViewInAr,
+
+                contentDescription = null,
+                tint = AccentColor.copy(0.8f),
+                modifier = Modifier.size(48.dp)
             )
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "No Models Yet",
+            style = MaterialTheme.typography.titleLarge,
+            color = TextWhite,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Your collection is empty.\nTap the + button to create your first 3D model from video!",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextGray,
+            textAlign = TextAlign.Center,
+            lineHeight = 22.sp
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 幽灵按钮
+        OutlinedButton(
+            onClick = onActionClick,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentColor),
+            border = BorderStroke(1.dp, AccentColor.copy(0.5f))
+        ) {
+            Icon(Icons.Rounded.Videocam, null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create Now")
+        }
+    }
+}
+
+// 下拉刷新指示器
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlassyRefreshIndicator(
+    state: androidx.compose.material3.pulltorefresh.PullToRefreshState,
+    isRefreshing: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // 减少微小触碰的闪烁
+    val isVisible = isRefreshing || state.distanceFraction > 0.1f
+    val isReadyToRelease = state.distanceFraction >= 1f
+
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        label = "scale",
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
+    Box(
+        modifier = modifier
+            .padding(top = 110.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = scale.coerceIn(0f, 1f)
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            color = if (isReadyToRelease && !isRefreshing) AccentColor.copy(alpha = 0.85f) else Color.Black.copy(
+                alpha = 0.7f
+            ),
+            contentColor = if (isReadyToRelease && !isRefreshing) Color.Black else AccentColor,
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(
+                1.dp,
+                AccentColor.copy(alpha = if (isReadyToRelease) 1f else 0.3f)
+            ),
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(
+                        color = AccentColor,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Updating...",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentColor
+                    )
+                } else {
+                    Crossfade(targetState = isReadyToRelease, label = "icon") { ready ->
+                        if (ready) {
+                            Icon(Icons.Rounded.Sync, null, modifier = Modifier.size(16.dp))
+                        } else {
+                            Icon(Icons.Rounded.Cached, null, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isReadyToRelease) "Release" else "Pull Down",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -468,33 +702,30 @@ fun GlassyIconButton(
 
 
 @Composable
-fun ProductStaggeredGrid(
+fun ProductListViewWithPadding(
     dataList: List<AssetCard>,
-    bottomPadding: Dp,
+    padding: PaddingValues,
     onItemClick: (Int) -> Unit,
-    onCollectClick: (Int) -> Unit
+    onCollect: (Int) -> Unit
 ) {
-    LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalItemSpacing = 12.dp,
-        contentPadding = PaddingValues(
-            start = 12.dp, end = 12.dp, top = 8.dp,
-            bottom = bottomPadding + 80.dp
-        ),
+    val tagColorBinder = remember { TagColorBinder(TagPalette) }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        contentPadding = padding,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         items(dataList, key = { it.id }) { item ->
-            ProductCard(
+            ProductListItem(
                 item = item,
+                tagColorBinder = tagColorBinder,
                 onClick = { onItemClick(item.id) },
-                onCollectClick = { onCollectClick(item.id) }
+                onCollectClick = { onCollect(item.id) }
             )
         }
     }
 }
 
-// 绑定到图标
 @Composable
 fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit) {
     var show by remember { mutableStateOf(false) }
@@ -548,7 +779,7 @@ fun ProductCard(item: AssetCard, onClick: () -> Unit, onCollectClick: () -> Unit
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.3f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        .clickable { onCollectClick() }, //触发点击回调
+                        .clickable { onCollectClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -641,7 +872,6 @@ fun ProcessingStatusBadge(count: Int) {
     }
 }
 
-// 用于 FAB
 @Composable
 private fun GlassBubble(
     modifier: Modifier = Modifier,
@@ -712,19 +942,16 @@ private fun GlassBubble(
     }
 }
 
-//指引弹窗
 @Composable
 fun GlassyUploadGuideDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
-                // 边框渐变，增加质感
                 .border(
                     width = 1.dp,
                     brush = Brush.verticalGradient(
@@ -740,7 +967,6 @@ fun GlassyUploadGuideDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -761,9 +987,7 @@ fun GlassyUploadGuideDialog(
                     }
                 }
 
-                // 分割线
                 HorizontalDivider(color = Color.White.copy(0.1f))
-
 
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     GuideTipItem(
@@ -785,11 +1009,9 @@ fun GlassyUploadGuideDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 底部按钮
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Cancel 按钮
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier
@@ -797,7 +1019,7 @@ fun GlassyUploadGuideDialog(
                             .height(48.dp),
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(0.05f), // 淡淡的灰色
+                            containerColor = Color.White.copy(0.05f),
                             contentColor = TextWhite.copy(0.8f)
                         ),
                         elevation = ButtonDefaults.buttonElevation(0.dp)
@@ -805,7 +1027,6 @@ fun GlassyUploadGuideDialog(
                         Text("Cancel", fontWeight = FontWeight.SemiBold)
                     }
 
-                    // Confirm 按钮 (高亮)
                     Button(
                         onClick = onConfirm,
                         modifier = Modifier
@@ -840,7 +1061,6 @@ fun GuideTipItem(
             .border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
-        // 图标容器
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -858,7 +1078,6 @@ fun GuideTipItem(
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // 文字
         Column {
             Text(
                 text = title,
@@ -875,7 +1094,6 @@ fun GuideTipItem(
         }
     }
 }
-
 
 @Composable
 fun GlassyLimitDialog(
@@ -903,7 +1121,6 @@ fun GlassyLimitDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 图标
                 Box(
                     modifier = Modifier
                         .size(60.dp)
