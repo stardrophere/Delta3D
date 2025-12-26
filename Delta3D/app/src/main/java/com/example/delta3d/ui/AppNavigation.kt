@@ -238,17 +238,23 @@ fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
                     )
                 }
 
-                // --- 主业务模块 ---
+                //  主业务模块
                 composable("home") {
                     HomeScreen(
                         sessionVm = sessionVm,
                         innerPadding = innerPadding,
                         onAssetClick = { assetId -> navController.navigate("detail/$assetId") },
-                        // 处理上传跳转
                         onNavigateToUpload = { uri ->
+                            val uriString = uri.toString()
+                            // URL 编码
                             val encodedUri =
-                                URLEncoder.encode(uri.toString(), StandardCharsets.UTF_8.toString())
+                                URLEncoder.encode(uriString, StandardCharsets.UTF_8.toString())
                             navController.navigate("upload/$encodedUri")
+                        },
+
+                        // 跳转到全屏树
+                        onNavigateToTree = {
+                            navController.navigate("delta_tree?isReplay=true")
                         }
                     )
                 }
@@ -380,7 +386,7 @@ fun AppNavigation(sessionVm: SessionViewModel, isFirstLaunch: Boolean) {
                 }
 
 
-                //首页跳转
+                //个人页跳转
                 composable("profile") {
                     ProfileScreen(
                         sessionVm = sessionVm,
