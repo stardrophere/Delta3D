@@ -39,7 +39,7 @@ fun HomeTreeCard(
             .background(Color(0xFF0F2027))
     ) {
         // WebView 层
-        Box(modifier = Modifier.alpha(0.3f + (0.7f * expansionFraction))) {
+        Box(modifier = Modifier.alpha(0.6f + (0.4f * expansionFraction))) {
             AndroidView(
                 factory = { context ->
                     WebView(context).apply {
@@ -85,7 +85,7 @@ fun HomeTreeCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = (1f - expansionFraction) * 0.5f))
+                .background(Color.Black.copy(alpha = (1f - expansionFraction) * 0.2f))
         )
 
         Box(
