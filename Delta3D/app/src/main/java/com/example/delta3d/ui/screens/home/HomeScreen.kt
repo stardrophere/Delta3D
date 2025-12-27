@@ -119,8 +119,8 @@ private val TextGray = Color.White.copy(alpha = 0.6f)
 private val GlassContainerColor = Color(0xFF1E1E1E).copy(alpha = 0.95f)
 
 // 定义高度常量
-private val EXPANDED_HEIGHT = 300.dp
-private val COLLAPSED_HEIGHT = 200.dp
+private val EXPANDED_HEIGHT = 250.dp
+private val COLLAPSED_HEIGHT = 150.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,6 +160,7 @@ fun HomeScreen(
 
     val onCollectToggle: (Int) -> Unit = { id -> token?.let { homeVm.toggleCollect(id, it) } }
 
+
     val density = LocalDensity.current
     val maxHeightPx = with(density) { EXPANDED_HEIGHT.toPx() }
     val minHeightPx = with(density) { COLLAPSED_HEIGHT.toPx() }
@@ -170,6 +171,7 @@ fun HomeScreen(
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (isRefreshing) return Offset.Zero
+
                 if (available.y < 0) {
                     val delta = available.y
                     val newOffset = heightOffsetPx + delta
@@ -187,6 +189,7 @@ fun HomeScreen(
                 source: NestedScrollSource
             ): Offset {
                 if (isRefreshing) return Offset.Zero
+
                 if (available.y > 0) {
                     val delta = available.y
                     val newOffset = heightOffsetPx + delta
@@ -202,15 +205,12 @@ fun HomeScreen(
 
     val currentHeaderHeight = with(density) { (maxHeightPx + heightOffsetPx).toDp() }
     val expansionFraction = (currentHeaderHeight - COLLAPSED_HEIGHT) / (EXPANDED_HEIGHT - COLLAPSED_HEIGHT)
+
     val focusManager = LocalFocusManager.current
     val pullRefreshState = rememberPullToRefreshState()
 
-    val headerTopMargin = 0.dp
-    val contentGap = 12.dp
-
     val haptic = LocalHapticFeedback.current
     var hasVibrated by remember { mutableStateOf(false) }
-
     LaunchedEffect(pullRefreshState.distanceFraction) {
         if (pullRefreshState.distanceFraction >= 1f && !hasVibrated) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -252,29 +252,27 @@ fun HomeScreen(
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection)
             ) {
-                val listTopPadding = headerTopMargin +
-                        currentHeaderHeight +
-                        contentGap
+                val headerTopMargin = 0.dp
+                val topPaddingBase = headerTopMargin + innerPadding.calculateTopPadding()
+
 
                 val listContentPadding = PaddingValues(
-                    top = listTopPadding,
+                    top = currentHeaderHeight + topPaddingBase + 12.dp,
                     bottom = innerPadding.calculateBottomPadding() + 100.dp,
                     start = 12.dp,
                     end = 12.dp
                 )
 
-                // 列表内容
                 if (displayAssets.isEmpty() && !isRefreshing) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = listTopPadding),
+                            .padding(top = EXPANDED_HEIGHT),
                         contentAlignment = Alignment.Center
                     ) {
                         if (searchQuery.isNotEmpty()) {
                             Text("No results for \"$searchQuery\"", color = Color.White.copy(0.5f))
                         } else {
-                            // 空状态提示
                             EmptyHomeState(
                                 onActionClick = {
                                     if (processingCount >= MAX_PROCESSING_LIMIT) {
@@ -320,80 +318,111 @@ fun HomeScreen(
                 }
 
                 // Header 层
+                val totalHeaderHeight = currentHeaderHeight + topPaddingBase
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(currentHeaderHeight)
-                        .padding(horizontal = 12.dp)
-                        .padding(top = headerTopMargin + innerPadding.calculateTopPadding())
+                        .height(totalHeaderHeight)
                         .align(Alignment.TopCenter)
-                ) {
-                    HomeTreeCard(
-                        modifier = Modifier.fillMaxSize(),
-                        expansionFraction = expansionFraction
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Δ 3D",
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "Interactive Zone",
-                                        fontSize = 10.sp,
-                                        color = AccentColor,
-                                        modifier = Modifier.alpha(
-                                            (expansionFraction * 2 - 1).coerceIn(0f, 1f)
-                                        )
-                                    )
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    AnimatedVisibility(visible = processingCount > 0) {
-                                        ProcessingStatusBadge(count = processingCount)
-                                        Spacer(modifier = Modifier.width(24.dp))
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(0.1f))
-                                            .clickable { onNavigateToTree() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Rounded.Fullscreen, null, tint = Color.White)
-                                    }
-                                }
-                            }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                EditableGlassySearchBar(
-                                    query = searchQuery,
-                                    onQueryChange = { homeVm.onSearchInput(it) },
-                                    placeholder = "Search models...",
-                                    modifier = Modifier.weight(1f)
+                ) {
+                    // 动态遮罩层
+                    val blockerAlpha = (1f - expansionFraction).coerceIn(0f, 1f)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(blockerAlpha)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF0F2027),
+                                        Color(0xFF0F2027),
+                                        Color(0xFF0F2027).copy(alpha = 0.9f),
+                                        Color.Transparent
+                                    )
                                 )
-                                AnimatedVisibility(visible = searchQuery.isEmpty()) {
-                                    Row {
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        GlassyIconButton(
-                                            icon = if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
-                                            onClick = { isGridView = !isGridView }
+                            )
+                    )
+
+                    // 卡片容器
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = topPaddingBase)
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        HomeTreeCard(
+                            modifier = Modifier.fillMaxSize(),
+                            expansionFraction = expansionFraction
+                        ) {
+                            // 卡片内容
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // 标题、状态图标
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Δ 3D",
+                                            fontSize = 28.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White
                                         )
+                                        Text(
+                                            text = "Interactive Zone",
+                                            fontSize = 10.sp,
+                                            color = AccentColor,
+                                            modifier = Modifier.alpha(
+                                                (expansionFraction * 2 - 1).coerceIn(0f, 1f)
+                                            )
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        AnimatedVisibility(visible = processingCount > 0) {
+                                            ProcessingStatusBadge(count = processingCount)
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White.copy(0.1f))
+                                                .clickable { onNavigateToTree() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.Fullscreen, null, tint = Color.White)
+                                        }
+                                    }
+                                }
+
+                                // 搜索栏
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    EditableGlassySearchBar(
+                                        query = searchQuery,
+                                        onQueryChange = { homeVm.onSearchInput(it) },
+                                        placeholder = "Search models...",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    AnimatedVisibility(visible = searchQuery.isEmpty()) {
+                                        Row {
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            GlassyIconButton(
+                                                icon = if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
+                                                onClick = { isGridView = !isGridView }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -432,6 +461,7 @@ fun HomeScreen(
             )
         }
 
+        // 弹窗
         if (showUploadGuide) {
             GlassyUploadGuideDialog(
                 onDismiss = { showUploadGuide = false },
