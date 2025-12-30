@@ -136,7 +136,7 @@ class StreamDirection(str, Enum):
     LEFT = "left"
     RIGHT = "right"
 
-    # 原有方向
+    # 原方向
     CLOCKWISE = "clockwise"
     COUNTER_CLOCKWISE = "counter_clockwise"
 

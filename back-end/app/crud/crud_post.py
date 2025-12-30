@@ -3,6 +3,9 @@ from fastapi import HTTPException
 from app.schemas import PostDetail, PostAssetInfo, CommentOut
 from sqlmodel import Session, select, or_, and_, col
 from typing import List
+
+
+
 from app.models import (
     CommunityPost, ModelAsset, InteractionLike,
     PostCollection, Comment, UserFollow, User, Visibility
@@ -16,7 +19,7 @@ def get_posts_by_user(
 ) -> List[dict]:
     """
     查询 target_user_id 发布的所有帖子。
-    同时计算 current_user_id 是否点过赞。
+    同时计算 current_user_id 与这些帖子的交互状态。
     """
     # 查询该用户发布的所有帖子
     statement = (
@@ -26,32 +29,67 @@ def get_posts_by_user(
     )
     posts = session.exec(statement).all()
 
+    if not posts:
+        return []
+
+    # 批量查询交互状态
+
+    # 我点赞过的帖子ID
+    liked_ids_stmt = select(InteractionLike.post_id).where(InteractionLike.user_id == current_user_id)
+    my_liked_ids = set(session.exec(liked_ids_stmt).all())
+
+    # 收藏过的帖子ID
+    collected_ids_stmt = select(PostCollection.post_id).where(PostCollection.user_id == current_user_id)
+    my_collected_ids = set(session.exec(collected_ids_stmt).all())
+
+    # 评论过的帖子ID
+    commented_ids_stmt = select(Comment.post_id).where(Comment.user_id == current_user_id)
+    my_commented_ids = set(session.exec(commented_ids_stmt).all())
+
+    # 是否关注了该目标用户
+    is_following_target = False
+    if current_user_id != target_user_id:
+        follow_stmt = select(UserFollow).where(
+            UserFollow.follower_id == current_user_id,
+            UserFollow.followed_id == target_user_id
+        )
+        is_following_target = session.exec(follow_stmt).first() is not None
+
     results = []
     for post in posts:
         # 获取关联的model信息
         asset = post.asset
         author = post.author
 
-        # 检查当前用户是否点赞
-        # 查询 InteractionLike 表
-        like_stat = select(InteractionLike).where(
-            InteractionLike.user_id == current_user_id,
-            InteractionLike.post_id == post.id
-        )
-        is_liked = session.exec(like_stat).first() is not None
 
-        # 组装数据
+        display_desc = post.content if post.content else asset.description
+
         results.append({
+            # 基础信息
             "post_id": post.id,
             "asset_id": asset.id,
             "title": asset.title,
             "cover_url": asset.video_path,
-            "description": post.content or asset.description,
+            "description": display_desc,
             "tags": asset.tags,
+            "published_at": str(post.published_at),
+
+            # 统计数据
+            "view_count": post.view_count,
             "like_count": post.like_count,
-            "is_liked": is_liked,
+            "collect_count": post.collect_count,
+            "comment_count": post.comment_count,
+
+            # 作者信息
+            "owner_id": author.id,
             "owner_name": author.username,
-            "owner_avatar": author.avatar_url
+            "owner_avatar": author.avatar_url,
+
+            # 交互状态
+            "is_liked": post.id in my_liked_ids,
+            "is_collected": post.id in my_collected_ids,
+            "has_commented": post.id in my_commented_ids,
+            "is_following": is_following_target
         })
 
     return results
