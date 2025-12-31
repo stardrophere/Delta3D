@@ -21,6 +21,22 @@ from app.crud import crud_post
 router = APIRouter()
 
 
+@router.get("/users/me/posts", response_model=List[PostCard])
+def read_my_posts(
+        session: Session = Depends(get_session),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    获取【我自己】的所有帖子列表
+    """
+    posts = crud_post.get_posts_by_user(
+        session=session,
+        target_user_id=current_user.id,
+        current_user_id=current_user.id
+    )
+    return posts
+
+
 @router.get("/users/{target_user_id}/posts", response_model=List[PostCard])
 def read_user_posts(
         target_user_id: int,
@@ -33,22 +49,6 @@ def read_user_posts(
     posts = crud_post.get_posts_by_user(
         session=session,
         target_user_id=target_user_id,
-        current_user_id=current_user.id
-    )
-    return posts
-
-
-@router.get("/users/me/posts", response_model=List[PostCard])
-def read_my_posts(
-        session: Session = Depends(get_session),
-        current_user: User = Depends(get_current_user)
-):
-    """
-    获取【我自己】的所有帖子列表
-    """
-    posts = crud_post.get_posts_by_user(
-        session=session,
-        target_user_id=current_user.id,
         current_user_id=current_user.id
     )
     return posts

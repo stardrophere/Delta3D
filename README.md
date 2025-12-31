@@ -16,7 +16,123 @@
 本项目主要分为前端移动端应用和后端服务器两部分：
 
 * **前端 (Frontend)**: 位于 `Delta3D/` 目录下。包含移动端应用的源代码。
+* 前端核心目录结构
+```text
+com.example.delta3d
+├── api                                 // [网络层] HTTP API 定义与数据模型
+│   ├── ApiService.kt                   // Retrofit 接口定义 (GET/POST请求)
+│   ├── AssetCard.kt                    // 资源卡片的数据模型 (列表展示用)
+│   ├── AssetDetailModels.kt            // 资源详情页相关的数据模型
+│   ├── AuthInterceptor.kt              // OkHttp 拦截器 (自动添加 Token)
+│   ├── AuthModels.kt                   // 登录/注册相关的请求与响应模型
+│   ├── ChatModels.kt                   // 聊天消息与会话的数据模型
+│   ├── Models.kt                       // 通用或共用的基础数据模型
+│   ├── RetrofitClient.kt               // Retrofit 单例与配置
+│   ├── StreamModels.kt                 // 流媒体相关的数据模型
+│   └── UserModel.kt                    // 用户个人信息数据模型
+├── config                              // [配置层] 全局常量
+│   └── AppConfig.kt                    // App 全局配置
+├── data                                // [数据层] 本地数据存储
+│   └── TokenStore.kt                   // DataStore/SP 封装 (存取 Access/Refresh Token)
+├── manager                             // [管理层] 长连接与服务管理
+│   └── ChatSocketManager.kt            // WebSocket 管理类
+├── ui                                  // [视图层] Jetpack Compose 界面
+│   ├── components                      // 通用 UI 组件库
+│   │   ├── BottomNavBar.kt             // 底部导航栏组件
+│   │   ├── GlassyFeedback.kt           // 毛玻璃效果反馈组件
+│   │   └── NetworkStatusDialog.kt      // 网络状态提示弹窗
+│   ├── screens                         // -> 各功能模块页面
+│   │   ├── auth                        // -> 认证模块
+│   │   │   └── AuthScreens.kt          // 登录与注册页面 UI
+│   │   ├── chat                        // -> 聊天模块
+│   │   │   ├── ChatListScreen.kt       // 消息列表页面 (会话列表)
+│   │   │   ├── ChatListViewModel.kt    // 消息列表业务逻辑
+│   │   │   ├── ChatScreen.kt           // 单聊详情页面
+│   │   │   └── ChatViewModel.kt        // 单聊业务逻辑
+│   │   ├── community                   // -> 社区模块
+│   │   │   ├── CommunityScreen.kt      // 社区/动态主页
+│   │   │   └── CommunityViewModel.kt   // 社区列表逻辑
+│   │   ├── detail                      // -> 详情展示模块
+│   │   │   ├── AssetDetailScreen.kt    // 3D资源详情页面
+│   │   │   ├── AssetDetailViewModel.kt // 资源详情逻辑
+│   │   │   ├── PostDetailScreen.kt     // 帖子/动态详情页面
+│   │   │   └── PostDetailViewModel.kt  // 帖子详情逻辑
+│   │   ├── home                        // -> 首页模块
+│   │   │   ├── HomeScreen.kt           // App 首页入口
+│   │   │   ├── HomeTreeCard.kt         // 首页粒子树交互卡片组件
+│   │   │   ├── HomeViewModel.kt        // 首页数据加载逻辑
+│   │   │   └── ProductListView.kt      // 模型资源列表视图组件
+│   │   ├── onboarding                  // -> 引导模块
+│   │   │   ├── Delta3DLogoSplash.kt    // 启动页 (Logo 动画)
+│   │   │   └── DeltaTreeScreen.kt      // 启动交互页 (Delta Tree)
+│   │   ├── preview                     // -> 预览模块
+│   │   │   ├── StreamPreviewScreen.kt  // 流媒体/模型实时预览播放页
+│   │   │   └── StreamViewModel.kt      // 预览流控制逻辑
+│   │   ├── profile                     // -> 个人中心模块
+│   │   │   ├── DownloadHistoryScreen.kt    // 下载历史页面
+│   │   │   ├── DownloadHistoryViewModel.kt // 下载记录逻辑
+│   │   │   ├── PlanSettingsScreen.kt       // 会员/套餐设置页面
+│   │   │   ├── ProfileScreen.kt            // 个人中心主页
+│   │   │   ├── ProfileViewModel.kt         // 个人信息逻辑
+│   │   │   ├── SavedAssetsScreen.kt        // 已收藏资源页面
+│   │   │   ├── SavedAssetsViewModel.kt     // 收藏资源逻辑
+│   │   │   ├── SavedPostsScreen.kt         // 已收藏帖子页面
+│   │   │   ├── SavedPostsViewModel.kt      // 收藏帖子逻辑
+│   │   │   └── UserListScreen.kt           // 用户列表 (关注/粉丝)
+│   │   ├── publish                     // -> 发布模块
+│   │   │   └── PublishPostScreen.kt    // 发布帖子/动态的页面
+│   │   └── upload                      // -> 上传模块
+│   │   │   ├── UploadScreen.kt         // 上传视频的页面
+│   │   │   └── UploadViewModel.kt      // 文件上传业务逻辑
+│   ├── session                         // -> 全局会话
+│   │   └── SessionViewModel.kt         // 全局会话状态
+│   └── AppNavigation.kt                // Jetpack Navigation 路由配置
+├── utils                               // [工具层] 通用工具类
+│   ├── AuthEvents.kt                   // 认证登出事件定义
+│   ├── ShareLinkUtils.kt               // 分享链接生成与解析工具
+│   ├── TimeUtils.kt                    // 时间格式化工具
+│   └── WebViewPool.kt                  // WebView 复用池
+├── Delta3DApplication.kt               // 全局 Application
+└── MainActivity.kt                     // 主 Activity
+```
 * **后端 (Backend)**: 位于 `back-end/` 目录下。包含服务器端处理逻辑、3D 重建算法接口等。
+
+* 后端核心目录结构
+```text
+app
+├── api                     # API 路由层 (Router Layer)
+│   ├── v1
+│   │   ├── endpoints       # 具体业务终端：处理请求分发与参数校验
+│   │   │   ├── assets.py   # 模型资产上传与管理接口
+│   │   │   ├── auth.py     # 登录、注册与鉴权接口
+│   │   │   ├── chat.py     # 即时通讯历史与对话接口
+│   │   │   ├── posts.py    # 社区帖子发布与互动接口
+│   │   │   ├── stream.py   # WebRTC 流媒体信令交互接口
+│   │   │   └── users.py    # 用户个人信息管理接口
+│   │   └── api.py          # 路由汇总：聚合所有子模块路由
+│   └── deps.py             # 依赖注入：包括 JWT 验证与数据库 Session 获取
+├── core                    # 基础设施层 (Infrastructure Layer)
+│   ├── config.py           # 全局配置管理
+│   ├── security.py         # 安全策略：JWT 令牌生成与密码加密
+│   ├── socket_manager.py   # WebSocket 连接管理器：处理实时消息定向投递
+│   └── stream_manager.py   # 流媒体管理器：负责 Instant-NGP 与 FFmpeg 进程调度
+├── crud                    # 数据访问层 (Data Access Layer / CRUD)
+│   ├── crud_asset.py       # 模型资产数据库增删改查逻辑
+│   ├── crud_post.py        # 社区帖子及社交关系交互逻辑
+│   └── crud_user.py        # 用户信息存储与更新逻辑
+├── ngp                     # 业务服务层 - 核心算法引擎 (Service Layer)
+│   ├── creater.py          # Instant-NGP 训练任务创建逻辑
+│   └── worker.py           # 异步训练引擎：基于 BackgroundTasks 的非阻塞处理
+├── process_manager         # 进程管理工具
+│   └── utils.py            # 包含 NonBlockingCommandRunner 等执行工具
+├── window_controller       # 业务服务层 - 远程控制 (Service Layer)
+│   └── continuous.py       # 连续控制算法：将 API 指令映射为渲染窗口鼠标事件
+├── database.py             # 数据库引擎与 Session 生命周期管理
+├── main.py                 # 应用入口：初始化 FastAPI 实例与中间件
+├── models.py               # 数据库实体定义 (SQLModel/SQLAlchemy)
+└── schemas.py              # 数据传输对象定义 (Pydantic DTOs)
+```
+
 
 ---
 
@@ -193,3 +309,6 @@ python run.py
 * **Issues**: [GitHub Issues](https://github.com/android-app-development-course/2025-Autumn-Aberdeen-10-Delta3D/issues)
 
 ---
+
+
+
